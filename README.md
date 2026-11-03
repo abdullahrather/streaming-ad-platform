@@ -212,11 +212,13 @@ Dashboard routes need `Authorization: Bearer <token>` from login. Ad server rout
 | `GET` | `/auth/me` | Your profile and organisations |
 | `GET` | `/creatives` | List a campaign's video ads |
 | `POST` | `/creatives` | Upload a video ad |
+| `PATCH` | `/creatives/:id` | Change an ad's share of delivery |
 | `POST` | `/player-tokens` | Exchange the ad server key for a player token |
 | `GET` | `/vast` | Get an ad as VAST XML, for video players |
 | `GET` | `/track/{event}` | Report ad progress, with a signed link from the VAST |
 | `GET` | `/click` | Record a click and redirect |
 | `GET` | `/player/catalogue` | Shows the demo site can play |
+| `DELETE` | `/player/profile` | Delete a viewer's viewing profile |
 | | `/account/*` | Password, devices and two-factor settings |
 | | `/team/*` | Members, invitations and activity |
 | | `/admin/*` | The admin console |
