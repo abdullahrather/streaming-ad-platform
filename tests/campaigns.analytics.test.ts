@@ -24,6 +24,7 @@ import { invitationsRouter, teamRouter } from '@/modules/team/team.routes';
 import {
   addMetrics,
   clearDatabase,
+  createApprovedCreative,
   createTestCampaign,
   createTestShow,
   createTestUser,
@@ -542,7 +543,8 @@ describe('Demo traffic', () => {
   it('serves ads to running campaigns and stores the results', async () => {
     const user = await createTestUser();
     await createTestShow();
-    await createTestCampaign(user.id);
+    const campaign = await createTestCampaign(user.id);
+    await createApprovedCreative(campaign.id, user.id);
 
     const stored = await runTrafficTick();
     await drainEvents();

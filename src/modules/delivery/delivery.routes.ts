@@ -9,7 +9,7 @@
  */
 import { Router } from 'express';
 import { requireIngestKey } from '@/middleware/ingestKey';
-import { adDecisionQuerySchema, eventBatchSchema } from './delivery.schema';
+import { adContextSchema, adDecisionQuerySchema, eventBatchSchema } from './delivery.schema';
 import { deliveryService } from './delivery.service';
 import { enqueueEvents } from './event-queue';
 
@@ -19,7 +19,8 @@ deliveryRouter.get('/ad-decision', requireIngestKey, (req, res, next) => {
   void (async (): Promise<void> => {
     try {
       const query = adDecisionQuerySchema.parse(req.query);
-      const data = await deliveryService.decide(query);
+      const { viewerId, breakId, consent } = adContextSchema.parse(req.query);
+      const data = await deliveryService.decide(query, { viewerId, breakId, consent });
 
       res.status(200).json({ status: 'success', data });
     } catch (error) {

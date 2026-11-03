@@ -12,6 +12,7 @@ import { seesAllOrganisations, type Actor } from '@/lib/actor';
 import { prisma } from '@/lib/prisma';
 import { AppError } from '@/middleware/errorHandler';
 import { decisionCache } from '@/modules/delivery/decision-cache';
+import { forecastCampaign } from './forecast.service';
 import type {
   CreateCampaignDto,
   DateRange,
@@ -81,6 +82,8 @@ type CampaignAnalyticsRow = Campaign & {
   thirdQuartiles: bigint;
   completions: bigint;
   lifetimeImpressions: bigint;
+  costMillicents: bigint;
+  lifetimeCostMillicents: bigint;
 };
 
 interface TotalsRow {
@@ -125,8 +128,7 @@ const toTotals = (row: TotalsRow): PerformanceTotals => {
   };
 };
 
-const spend = (impressions: number, cpmCents: number): number =>
-  Math.round((impressions * cpmCents) / 1000);
+const toCents = (millicents: bigint): number => Math.round(Number(millicents) / 1000);
 
 /** Compares delivery so far with an even spread of the goal across the flight. */
 const pacingOf = (campaign: Campaign, delivered: number, now: Date): Pacing => {
@@ -184,14 +186,36 @@ export class CampaignsService {
 
   async createCampaign(actor: Actor, dto: CreateCampaignDto): Promise<Campaign> {
     if (!actor.organisationId) throw new AppError(409, 'Choose an organisation first.');
+    await this.assertOwnSegments(actor.organisationId, dto.targetSegmentIds);
 
-    return prisma.campaign.create({
-      data: { ...dto, userId: actor.sub, organisationId: actor.organisationId },
+    const forecast = await forecastCampaign(dto);
+    const created = await prisma.campaign.create({
+      data: {
+        ...dto,
+        userId: actor.sub,
+        organisationId: actor.organisationId,
+        forecastImpressions: forecast.expectedImpressions,
+        forecastReach: forecast.expectedReach,
+      },
     });
+    decisionCache.invalidate();
+    return created;
+  }
+
+  /** A campaign can only target its own organisation's segments. */
+  private async assertOwnSegments(organisationId: string, ids: string[]): Promise<void> {
+    if (ids.length === 0) return;
+
+    const owned = await prisma.audienceSegment.count({
+      where: { id: { in: ids }, organisationId },
+    });
+    if (owned !== new Set(ids).size)
+      throw new AppError(422, 'One of those audiences was not found.');
   }
 
   async updateCampaign(id: string, actor: Actor, dto: UpdateCampaignDto): Promise<Campaign> {
     const campaign = await this.findOneOrFail(id, actor);
+    await this.assertOwnSegments(campaign.organisationId, dto.targetSegmentIds ?? []);
 
     if (campaign.status === 'COMPLETED' && dto.status) {
       throw new AppError(409, 'A completed campaign cannot change status.');
@@ -247,6 +271,17 @@ export class CampaignsService {
         c.target_genres AS "targetGenres",
         c.target_devices::text[] AS "targetDevices",
         c.target_slots::text[] AS "targetSlots",
+        c.target_segment_ids AS "targetSegmentIds",
+        c.delivery_type AS "deliveryType",
+        c.pacing_mode AS "pacingMode",
+        c.daily_budget_cents AS "dailyBudgetCents",
+        c.daily_impression_target AS "dailyImpressionTarget",
+        c.frequency_cap_per_day AS "frequencyCapPerDay",
+        c.active_hours AS "activeHours",
+        c.active_days AS "activeDays",
+        c.competitive_category AS "competitiveCategory",
+        c.forecast_impressions AS "forecastImpressions",
+        c.forecast_reach AS "forecastReach",
         c.created_at AS "createdAt",
         c.updated_at AS "updatedAt",
         u.email AS "ownerEmail",
@@ -256,7 +291,9 @@ export class CampaignsService {
         COALESCE(SUM(m.midpoints) FILTER (WHERE ${inRange}), 0) AS midpoints,
         COALESCE(SUM(m.third_quartiles) FILTER (WHERE ${inRange}), 0) AS "thirdQuartiles",
         COALESCE(SUM(m.completions) FILTER (WHERE ${inRange}), 0) AS completions,
-        COALESCE(SUM(m.impressions), 0) AS "lifetimeImpressions"
+        COALESCE(SUM(m.impressions), 0) AS "lifetimeImpressions",
+        COALESCE(SUM(m.cost_millicents) FILTER (WHERE ${inRange}), 0) AS "costMillicents",
+        COALESCE(SUM(m.cost_millicents), 0) AS "lifetimeCostMillicents"
       FROM campaigns c
       JOIN users u ON u.id = c.user_id
       LEFT JOIN metrics m ON m.campaign_id = c.id
@@ -268,13 +305,13 @@ export class CampaignsService {
     const now = new Date();
     return rows.map((row) => {
       const lifetimeImpressions = Number(row.lifetimeImpressions);
-      const lifetimeSpendCents = spend(lifetimeImpressions, row.cpmCents);
+      const lifetimeSpendCents = toCents(row.lifetimeCostMillicents);
       const totals = toTotals(row);
 
       return {
         ...row,
         ...totals,
-        spendCents: spend(totals.impressions, row.cpmCents),
+        spendCents: toCents(row.costMillicents),
         lifetimeImpressions,
         lifetimeSpendCents,
         deliveryRate: ratio(lifetimeImpressions, row.impressionGoal),

@@ -33,6 +33,53 @@ export interface CreativeView extends Omit<Creative, 'originalKey' | 'videoKey' 
   posterUrl: string;
 }
 
+export interface CreativeResults {
+  impressions: number;
+  clicks: number;
+  completions: number;
+  ctr: number;
+  completionRate: number;
+}
+
+export interface CreativeListing extends CreativeView {
+  results: CreativeResults;
+  /** How this ad compares with the campaign's best, once there's enough data. */
+  comparison: 'LEADING' | 'BEHIND' | 'TOO_CLOSE' | 'NOT_ENOUGH_DATA';
+}
+
+const MIN_TEST_IMPRESSIONS = 1000;
+/** A difference this many standard errors from zero has a 5% chance of being luck. */
+const SIGNIFICANT_Z = 1.96;
+
+const resultsOf = (impressions: number, clicks: number, completions: number): CreativeResults => ({
+  impressions,
+  clicks,
+  completions,
+  ctr: impressions > 0 ? clicks / impressions : 0,
+  completionRate: impressions > 0 ? completions / impressions : 0,
+});
+
+/** Two-proportion z-test on click-through rate. */
+export const isSignificantDifference = (a: CreativeResults, b: CreativeResults): boolean => {
+  const pooled = (a.clicks + b.clicks) / (a.impressions + b.impressions);
+  const error = Math.sqrt(pooled * (1 - pooled) * (1 / a.impressions + 1 / b.impressions));
+  return error > 0 && Math.abs(a.ctr - b.ctr) / error >= SIGNIFICANT_Z;
+};
+
+const compareToBest = (
+  own: CreativeResults,
+  best: CreativeResults | null,
+  rivals: CreativeResults[],
+): CreativeListing['comparison'] => {
+  if (!best || rivals.length < 2 || rivals.some((r) => r.impressions < MIN_TEST_IMPRESSIONS)) {
+    return 'NOT_ENOUGH_DATA';
+  }
+  if (own !== best) return isSignificantDifference(own, best) ? 'BEHIND' : 'TOO_CLOSE';
+
+  const others = rivals.filter((rival) => rival !== best);
+  return others.every((rival) => isSignificantDifference(best, rival)) ? 'LEADING' : 'TOO_CLOSE';
+};
+
 export const creativeFolder = (id: string): string => `creatives/${id}`;
 
 class CreativesService {
@@ -70,13 +117,53 @@ class CreativesService {
     return creative;
   }
 
-  async list(actor: Actor, campaignId: string): Promise<CreativeView[]> {
+  async list(actor: Actor, campaignId: string): Promise<CreativeListing[]> {
     await campaignsService.findOneOrFail(campaignId, actor);
     const creatives = await prisma.creative.findMany({
       where: { campaignId },
       orderBy: { createdAt: 'desc' },
     });
-    return creatives.map((creative) => this.toView(creative));
+
+    const totals = await prisma.creativeMetric.groupBy({
+      by: ['creativeId'],
+      where: { creativeId: { in: creatives.map(({ id }) => id) } },
+      _sum: { impressions: true, clicks: true, completions: true },
+    });
+    const totalsById = new Map(totals.map((row) => [row.creativeId, row._sum]));
+
+    const results = new Map(
+      creatives.map(({ id }) => {
+        const sum = totalsById.get(id);
+        return [
+          id,
+          resultsOf(sum?.impressions ?? 0, sum?.clicks ?? 0, sum?.completions ?? 0),
+        ] as const;
+      }),
+    );
+
+    const rivals = [...results.values()].filter(({ impressions }) => impressions > 0);
+    const best = rivals.reduce<CreativeResults | null>(
+      (leader, entry) => (!leader || entry.ctr > leader.ctr ? entry : leader),
+      null,
+    );
+
+    return creatives.map((creative) => {
+      const own = results.get(creative.id) as CreativeResults;
+      return {
+        ...this.toView(creative),
+        results: own,
+        comparison: compareToBest(own, best, rivals),
+      };
+    });
+  }
+
+  async setWeight(actor: Actor, id: string, weight: number): Promise<void> {
+    const creative = await prisma.creative.findUnique({ where: { id } });
+    if (!creative) throw new AppError(404, 'Ad not found.');
+    await campaignsService.findOneOrFail(creative.campaignId, actor);
+
+    await prisma.creative.update({ where: { id }, data: { weight } });
+    decisionCache.invalidate();
   }
 
   /**

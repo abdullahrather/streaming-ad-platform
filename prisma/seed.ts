@@ -14,6 +14,8 @@ import {
   OrganisationRole,
   CampaignStatus,
   CreativeStatus,
+  DeliveryType,
+  PacingMode,
   AdSlot,
   Device,
 } from '@prisma/client';
@@ -153,6 +155,19 @@ const CAMPAIGNS = [
   },
 ];
 
+/** Delivery rules that show what the platform can do. */
+const RULES: Record<string, Partial<Prisma.CampaignUncheckedCreateInput>> = {
+  'Electric City Car': {
+    pacingMode: PacingMode.EVEN,
+    frequencyCapPerDay: 3,
+    competitiveCategory: 'Automotive',
+  },
+  'Matchday Fan Bundle': { pacingMode: PacingMode.EVEN, competitiveCategory: 'Telecoms' },
+  'Family Breakfast': { activeHours: [6, 7, 8, 9, 10, 11], dailyBudgetCents: 40_000 },
+  'Mediterranean Escapes': { deliveryType: DeliveryType.AUCTION },
+  'Winter Coats Launch': { pacingMode: PacingMode.CUSTOM, dailyImpressionTarget: 150_000 },
+};
+
 /** Small seeded generator, so every seed produces the same demo story. */
 const createRandom = (seed: number) => (): number => {
   seed = (seed * 1664525 + 1013904223) % 4294967296;
@@ -188,6 +203,63 @@ interface DemoAd {
   userId: string;
 }
 
+/**
+ * Four weeks of hourly ad requests, in one statement. Forecasts read this history,
+ * so it behaves like real traffic: evening peaks and busier weekends, slow growth,
+ * days that run hot or cold, and big sports nights nobody can predict.
+ */
+async function createInventory(): Promise<void> {
+  await prisma.$transaction([
+    prisma.$queryRaw`SELECT setseed(0.42)::text`,
+    prisma.$executeRaw`
+      WITH days AS MATERIALIZED (
+        SELECT day::date,
+          (0.85 + random() * 0.3) * (1 + 0.006 * (day::date - (now()::date - 29))) AS level,
+          CASE WHEN random() < 0.3 THEN 2.2 ELSE 1 END AS big_match
+        FROM generate_series(now()::date - 29, now()::date + 1, interval '1 day') AS day
+      )
+      INSERT INTO inventory_hours (bucket, genre, slot, country, device, requests)
+      SELECT h.bucket, g.name, s.name::"AdSlot", c.name, d.name::"Device",
+        GREATEST(1, round(
+          170000 * g.share * s.share * c.share * d.share * today.level
+            * (0.12 + exp(-((local.hour - 20.5) ^ 2) / 8) + 0.3 * exp(-((local.hour - 12.5) ^ 2) / 6))
+            * CASE WHEN local.weekday IN (0, 6) THEN 1.25 ELSE 1 END
+            * CASE WHEN g.name = 'Sports' AND local.hour BETWEEN 18 AND 22
+                THEN today.big_match ELSE 1 END
+            * (0.94 + random() * 0.12)
+        ))::int
+      FROM generate_series(
+        date_trunc('hour', now()) - interval '28 days',
+        date_trunc('hour', now()) - interval '1 hour',
+        interval '1 hour'
+      ) AS h(bucket)
+      CROSS JOIN LATERAL (
+        SELECT EXTRACT(HOUR FROM h.bucket AT TIME ZONE 'Europe/Berlin')::float AS hour,
+          EXTRACT(DOW FROM h.bucket AT TIME ZONE 'Europe/Berlin')::int AS weekday
+      ) AS local
+      JOIN days AS today ON today.day = (h.bucket AT TIME ZONE 'Europe/Berlin')::date
+      CROSS JOIN (VALUES
+        ('Drama', 0.3), ('Crime', 0.2), ('Reality', 0.15),
+        ('Sports', 0.2), ('Documentary', 0.05), ('Kids', 0.1)
+      ) AS g(name, share)
+      CROSS JOIN (VALUES ('PRE_ROLL', 0.35), ('MID_ROLL', 0.5), ('POST_ROLL', 0.15)) AS s(name, share)
+      CROSS JOIN (VALUES
+        ('DE', 0.35), ('FR', 0.2), ('IT', 0.15), ('ES', 0.12), ('NL', 0.08), ('AT', 0.06), ('SE', 0.04)
+      ) AS c(name, share)
+      CROSS JOIN (VALUES ('CTV', 0.5), ('MOBILE', 0.3), ('WEB', 0.15), ('TABLET', 0.05)) AS d(name, share)
+    `,
+  ]);
+
+  await prisma.audienceDay.createMany({
+    data: Array.from({ length: 28 }, (_, index) => ({
+      day: new Date(Date.now() - index * DAY).toISOString().slice(0, 10),
+      viewers: 420_000,
+      consented: 294_000,
+      allTime: 1_900_000,
+    })),
+  });
+}
+
 /** Makes the videos, then links them to shows and approved ads. One waits for review. */
 async function createDemoMedia(
   shows: Array<{ id: string; title: string; genre: string }>,
@@ -213,6 +285,9 @@ async function createDemoMedia(
         label: `${ad.title} (short cut)`,
         status: CreativeStatus.PENDING_REVIEW,
       });
+    }
+    if (ad.title === 'Matchday Fan Bundle') {
+      entries.push({ ...ad, label: `${ad.title} (version B)`, status: CreativeStatus.APPROVED });
     }
     return entries;
   });
@@ -261,6 +336,30 @@ async function createDemoMedia(
       sizeBytes: mediaFileSize(`creatives/${ad.id}/video.mp4`),
     })),
   });
+
+  // A finished A/B test, so the comparison has something to show.
+  const [versionA, versionB] = creatives.filter(({ title }) => title === 'Matchday Fan Bundle');
+  if (versionA && versionB) {
+    const bucket = new Date(Math.floor(Date.now() / HOUR - 24) * HOUR);
+    await prisma.creativeMetric.createMany({
+      data: [
+        {
+          creativeId: versionA.id,
+          bucket,
+          impressions: 120_000,
+          clicks: 1100,
+          completions: 104_000,
+        },
+        {
+          creativeId: versionB.id,
+          bucket,
+          impressions: 118_000,
+          clicks: 1420,
+          completions: 103_000,
+        },
+      ],
+    });
+  }
 }
 
 /** Queued events and counters belong to the data being replaced. */
@@ -299,6 +398,8 @@ async function main(): Promise<void> {
   await prisma.organisation.deleteMany();
   await prisma.user.deleteMany();
   await prisma.auditLog.deleteMany();
+  await prisma.inventoryHour.deleteMany();
+  await prisma.audienceDay.deleteMany();
   await prisma.capturedEmail.deleteMany();
 
   const verified = new Date();
@@ -389,6 +490,7 @@ async function main(): Promise<void> {
         targetGenres: spec.genres,
         targetDevices: spec.devices,
         targetSlots: spec.slots,
+        ...RULES[spec.title],
       },
     });
 
@@ -442,6 +544,7 @@ async function main(): Promise<void> {
         };
         row.impressions = (row.impressions ?? 0) + impressions;
         row.clicks = (row.clicks ?? 0) + Math.round(impressions * CLICK_RATE[device]);
+        row.costMillicents = Number(row.costMillicents ?? 0) + impressions * spec.cpm;
         const finished = COMPLETION_RATE[slot];
         row.firstQuartiles =
           (row.firstQuartiles ?? 0) + Math.round(impressions * Math.sqrt(Math.sqrt(finished)));
@@ -459,6 +562,14 @@ async function main(): Promise<void> {
     await prisma.metric.createMany({ data: rows.slice(start, start + 5000) });
   }
 
+  await prisma.audienceSegment.createMany({
+    data: [
+      { organisationId: brightline.id, name: 'Sports fans', genres: ['Sports'] },
+      { organisationId: brightline.id, name: 'Families', genres: ['Kids', 'Reality'], minViews: 2 },
+    ],
+  });
+
+  await createInventory();
   if (!isDemo) await createDemoMedia(shows, demoAds);
 
   console.info(`Created ${CAMPAIGNS.length} campaigns and ${rows.length} hourly metric rows.`);

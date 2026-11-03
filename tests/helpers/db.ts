@@ -10,6 +10,7 @@ import {
   Role,
   OrganisationRole,
   CampaignStatus,
+  CreativeStatus,
   AdSlot,
   Device,
 } from '@prisma/client';
@@ -22,10 +23,14 @@ export const testPrisma = new PrismaClient({
   datasources: { db: { url: process.env['TEST_DATABASE_URL'] as string } },
 });
 
+const CampaignCreativeApproved = CreativeStatus.APPROVED;
+
 /** Wipes all data in dependency order */
 export async function clearDatabase(): Promise<void> {
   await redis.flushdb();
   await testPrisma.processedBatch.deleteMany();
+  await testPrisma.inventoryHour.deleteMany();
+  await testPrisma.audienceDay.deleteMany();
   await testPrisma.filteredEvent.deleteMany();
   await testPrisma.metric.deleteMany();
   await testPrisma.campaign.deleteMany();
@@ -106,6 +111,25 @@ export async function createTestCampaign(
   });
 }
 
+/** An approved ad, without running a conversion. */
+export const createApprovedCreative = (
+  campaignId: string,
+  createdById: string,
+  overrides: Partial<Prisma.CreativeUncheckedCreateInput> = {},
+) =>
+  testPrisma.creative.create({
+    data: {
+      campaignId,
+      createdById,
+      name: 'Film',
+      clickUrl: 'https://example.com',
+      status: CampaignCreativeApproved,
+      videoKey: 'x.mp4',
+      durationSeconds: 6,
+      ...overrides,
+    },
+  });
+
 /** Adds metric rows, one hour apart, ending in the most recent full hour. */
 export async function addMetrics(
   campaignId: string,
@@ -113,6 +137,7 @@ export async function addMetrics(
   metrics: Array<{ impressions: number; clicks: number; completions?: number; country?: string }>,
 ): Promise<void> {
   const currentHour = Math.floor(Date.now() / 3_600_000) * 3_600_000;
+  const { cpmCents } = await testPrisma.campaign.findUniqueOrThrow({ where: { id: campaignId } });
 
   await testPrisma.metric.createMany({
     data: metrics.map((metric, index) => ({
@@ -123,6 +148,7 @@ export async function addMetrics(
       device: Device.CTV,
       bucket: new Date(currentHour - (index + 1) * 3_600_000),
       impressions: metric.impressions,
+      costMillicents: metric.impressions * cpmCents,
       clicks: metric.clicks,
       completions: metric.completions ?? 0,
     })),

@@ -4,7 +4,7 @@
  * Zod schemas for campaign-related requests.
  */
 import { z } from 'zod';
-import { AdSlot, CampaignStatus, Device } from '@prisma/client';
+import { AdSlot, CampaignStatus, DeliveryType, Device, PacingMode } from '@prisma/client';
 
 const MAX_RANGE_DAYS = 366;
 const DAY_MS = 86_400_000;
@@ -32,6 +32,41 @@ const targeting = {
   targetSlots: z.array(z.enum(AdSlot)),
 };
 
+/** Delivery rules. Nullable fields turn a limit off. */
+const delivery = {
+  targetSegmentIds: z.array(z.string().min(1)).max(20),
+  deliveryType: z.enum(DeliveryType),
+  pacingMode: z.enum(PacingMode),
+  dailyBudgetCents: z.number().int().positive().nullable(),
+  dailyImpressionTarget: z.number().int().positive().nullable(),
+  frequencyCapPerDay: z.number().int().positive().max(100).nullable(),
+  activeHours: z.array(z.number().int().min(0).max(23)).max(24),
+  activeDays: z.array(z.number().int().min(0).max(6)).max(7),
+  competitiveCategory: z.string().trim().max(60),
+};
+
+const deliveryDefaults = {
+  targetSegmentIds: delivery.targetSegmentIds.default([]),
+  deliveryType: delivery.deliveryType.default(DeliveryType.GUARANTEED),
+  pacingMode: delivery.pacingMode.default(PacingMode.ASAP),
+  dailyBudgetCents: delivery.dailyBudgetCents.default(null),
+  dailyImpressionTarget: delivery.dailyImpressionTarget.default(null),
+  frequencyCapPerDay: delivery.frequencyCapPerDay.default(null),
+  activeHours: delivery.activeHours.default([]),
+  activeDays: delivery.activeDays.default([]),
+  competitiveCategory: delivery.competitiveCategory.default(''),
+};
+
+const hasDailyTarget = (value: {
+  pacingMode?: PacingMode | undefined;
+  dailyImpressionTarget?: number | null | undefined;
+}): boolean => value.pacingMode !== PacingMode.CUSTOM || Boolean(value.dailyImpressionTarget);
+
+const DAILY_TARGET_ERROR = {
+  error: 'Custom pacing needs a daily impression target.',
+  path: ['dailyImpressionTarget'],
+};
+
 const datesInOrder = (value: { startsAt?: Date | undefined; endsAt?: Date | undefined }): boolean =>
   !value.startsAt || !value.endsAt || value.endsAt > value.startsAt;
 
@@ -45,15 +80,23 @@ export const createCampaignSchema = z
     targetGenres: targeting.targetGenres.default([]),
     targetDevices: targeting.targetDevices.default([]),
     targetSlots: targeting.targetSlots.default([]),
+    ...deliveryDefaults,
   })
-  .refine(datesInOrder, DATE_ORDER_ERROR);
+  .refine(datesInOrder, DATE_ORDER_ERROR)
+  .refine(hasDailyTarget, DAILY_TARGET_ERROR);
 
 export type CreateCampaignDto = z.infer<typeof createCampaignSchema>;
+
+/** The same details, before a campaign exists. */
+export const forecastSchema = createCampaignSchema;
+
+export type ForecastDto = z.infer<typeof forecastSchema>;
 
 export const updateCampaignSchema = z
   .object({
     ...campaignFields,
     ...targeting,
+    ...delivery,
     status: z.enum([CampaignStatus.ACTIVE, CampaignStatus.PAUSED]),
   })
   .partial()

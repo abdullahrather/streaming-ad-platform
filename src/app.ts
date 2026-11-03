@@ -25,6 +25,7 @@ import { deliveryRouter } from '@/modules/delivery/delivery.routes';
 import { devRouter } from '@/modules/dev/dev.routes';
 import { docsRouter } from '@/modules/docs/docs.routes';
 import { playbackRouter } from '@/modules/playback/playback.routes';
+import { segmentsRouter } from '@/modules/segments/segments.routes';
 import { showsRouter } from '@/modules/shows/shows.routes';
 import { invitationsRouter, teamRouter } from '@/modules/team/team.routes';
 import { errorHandler } from '@/middleware/errorHandler';
@@ -83,6 +84,7 @@ export function createApp(): Application {
   app.use(mediaRouter);
   app.use(playbackRouter);
   app.use('/shows', showsRouter);
+  app.use('/segments', segmentsRouter);
   app.use(deliveryRouter);
 
   // ── Dashboard (when built) ────────────────────────────────────────────────
