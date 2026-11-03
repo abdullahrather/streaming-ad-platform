@@ -366,9 +366,25 @@ describe('Auctions', () => {
 
   it('never charges more than the bid', async () => {
     const { user, show } = await setup({ status: 'PAUSED' });
+    await bid(user.id, 2000);
+    await bid(user.id, 2000);
+
+    expect((await decide(show.id))?.priceCpmCents).toBe(2000);
+  });
+
+  it('turns away bids under the floor', async () => {
+    const { user, show } = await setup({ status: 'PAUSED' });
     await bid(user.id, 50);
 
-    expect((await decide(show.id))?.priceCpmCents).toBe(50);
+    expect(await decide(show.id)).toBeNull();
+  });
+
+  it('ignores bids under the floor when setting the price', async () => {
+    const { user, show } = await setup({ status: 'PAUSED' });
+    await bid(user.id, 99);
+    await bid(user.id, 2000);
+
+    expect((await decide(show.id))?.priceCpmCents).toBe(100);
   });
 
   it('puts guaranteed campaigns behind schedule first', async () => {
@@ -648,6 +664,18 @@ describe('Forecasts', () => {
 
     expect(forecast.expectedImpressions).toBeLessThan(40_000);
     expect(forecast.warnings).toContain('NOT_ENOUGH_INVENTORY');
+  });
+
+  it('expects nothing from a bid under the auction floor', async () => {
+    await seedInventory();
+
+    const forecast = await forecastCampaign(
+      forecastInput({ deliveryType: 'AUCTION', cpmCents: 50, impressionGoal: 1000 }),
+    );
+
+    expect(forecast.expectedImpressions).toBe(0);
+    expect(forecast.warnings).toContain('BID_BELOW_FLOOR');
+    expect(forecast.warnings).not.toContain('NOT_ENOUGH_INVENTORY');
   });
 
   it('applies the budget and daily limits', async () => {

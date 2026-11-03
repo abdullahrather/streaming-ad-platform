@@ -115,7 +115,7 @@ Run with `SIMULATE=0` to turn off demo traffic, and the dashboard shows only wha
 | **Audiences** | Targets people by what they watch, only if they consented |
 | **Competitive separation** | Keeps brands in the same category out of the same ad break |
 | **A/B tests** | Splits delivery between ads and only names a winner at 95% confidence |
-| **Auctions** | Bids for traffic guaranteed campaigns don't need, paying just above the next bid |
+| **Auctions** | Bids for traffic guaranteed campaigns don't need, paying just above the next bid. Bids under `AUCTION_FLOOR_CPM_CENTS` don't compete |
 
 These limits are checked in the same atomic step that reserves the ad, so they hold under concurrent traffic. See [how forecasts work](./docs/forecasting.md).
 

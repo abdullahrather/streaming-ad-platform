@@ -82,7 +82,7 @@ const orderCandidates = (
     if (delivered >= campaign.impressionGoal) return;
 
     if (campaign.deliveryType === 'AUCTION') {
-      auction.push(campaign);
+      if (campaign.cpmCents >= env.AUCTION_FLOOR_CPM_CENTS) auction.push(campaign);
       return;
     }
 

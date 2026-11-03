@@ -11,6 +11,7 @@
  *    audience, which gives reach = audience × (1 - e^(-impressions / audience)).
  */
 import { Prisma } from '@prisma/client';
+import { env } from '@/config/env';
 import { localTimeAt } from '@/lib/platform-time';
 import { prisma } from '@/lib/prisma';
 import type { ForecastDto } from './campaigns.schema';
@@ -22,6 +23,7 @@ const FORECAST_MARGIN = 0.15;
 
 export type ForecastWarning =
   | 'NO_HISTORY'
+  | 'BID_BELOW_FLOOR'
   | 'NOT_ENOUGH_INVENTORY'
   | 'BUDGET_BELOW_GOAL'
   | 'LIMITS_BELOW_GOAL'
@@ -207,8 +209,8 @@ export const forecastCampaign = async (
   const available = matching * (usesSegments ? consentShare : 1);
 
   const booked = await bookedDemand({ ...dto, targetGenres }, excludeCampaignId);
-  const open = dto.deliveryType === 'AUCTION' ? Math.max(0, available - booked) : available;
-  const contested = dto.deliveryType === 'AUCTION' ? open : Math.max(0, available - booked);
+  const belowFloor = dto.deliveryType === 'AUCTION' && dto.cpmCents < env.AUCTION_FLOOR_CPM_CENTS;
+  const contested = belowFloor ? 0 : Math.max(0, available - booked);
 
   const flightDays = Math.max(1, (dto.endsAt.getTime() - dto.startsAt.getTime()) / DAY_MS);
   const shareOfPlatform = wholePlatform > 0 ? matching / wholePlatform : 0;
@@ -233,6 +235,7 @@ export const forecastCampaign = async (
 
   const warnings: ForecastWarning[] = [];
   if (profile.size === 0) warnings.push('NO_HISTORY');
+  else if (belowFloor) warnings.push('BID_BELOW_FLOOR');
   else if (expected < dto.impressionGoal && contested < limit)
     warnings.push('NOT_ENOUGH_INVENTORY');
   if (budgetLimit < dto.impressionGoal) warnings.push('BUDGET_BELOW_GOAL');
