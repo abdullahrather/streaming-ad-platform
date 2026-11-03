@@ -12,6 +12,7 @@ import { seesAllOrganisations, type Actor } from '@/lib/actor';
 import { prisma } from '@/lib/prisma';
 import { AppError } from '@/middleware/errorHandler';
 import { decisionCache } from '@/modules/delivery/decision-cache';
+import { DAILY_TARGET_ERROR, hasDailyTarget } from './campaigns.schema';
 import { forecastCampaign } from './forecast.service';
 import type {
   CreateCampaignDto,
@@ -225,6 +226,14 @@ export class CampaignsService {
     if (endsAt <= startsAt) {
       throw new AppError(422, 'End date must be after the start date.');
     }
+    const pacing = {
+      pacingMode: dto.pacingMode ?? campaign.pacingMode,
+      dailyImpressionTarget:
+        dto.dailyImpressionTarget === undefined
+          ? campaign.dailyImpressionTarget
+          : dto.dailyImpressionTarget,
+    };
+    if (!hasDailyTarget(pacing)) throw new AppError(422, DAILY_TARGET_ERROR.error);
 
     const updated = await prisma.campaign.update({
       where: { id },

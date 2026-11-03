@@ -136,6 +136,45 @@ describe('Schedules', () => {
 });
 
 describe('Pacing and daily limits', () => {
+  const patch = async (
+    user: { email: string; password: string },
+    id: string,
+    body: Record<string, unknown>,
+  ) =>
+    request(app)
+      .patch(`/campaigns/${id}`)
+      .set('Authorization', await login(user))
+      .send(body);
+
+  it('refuses custom pacing without a daily target when updating', async () => {
+    const { user, campaign } = await setup();
+
+    const res = await patch(user, campaign.id, { pacingMode: 'CUSTOM' });
+
+    expect(res.status).toBe(422);
+    expect(await testPrisma.campaign.findUnique({ where: { id: campaign.id } })).toMatchObject({
+      pacingMode: 'ASAP',
+    });
+  });
+
+  it('refuses to clear the daily target of a custom campaign', async () => {
+    const { user, campaign } = await setup({ pacingMode: 'CUSTOM', dailyImpressionTarget: 100 });
+
+    const res = await patch(user, campaign.id, { dailyImpressionTarget: null });
+
+    expect(res.status).toBe(422);
+  });
+
+  it('accepts custom pacing with a target set now or stored already', async () => {
+    const { user, campaign } = await setup({ dailyImpressionTarget: 100 });
+
+    expect((await patch(user, campaign.id, { pacingMode: 'CUSTOM' })).status).toBe(200);
+    expect((await patch(user, campaign.id, { dailyImpressionTarget: 200 })).status).toBe(200);
+    expect(
+      (await patch(user, campaign.id, { pacingMode: 'ASAP', dailyImpressionTarget: null })).status,
+    ).toBe(200);
+  });
+
   it('holds an even campaign back when it gets ahead of schedule', async () => {
     const { show } = await setup({
       pacingMode: 'EVEN',
@@ -289,6 +328,50 @@ describe('Audiences', () => {
 
     expect(res.status).toBe(204);
     expect(await redis.exists('profile:fan')).toBe(0);
+  });
+
+  it('stops a campaign whose audiences have all gone', async () => {
+    const { user, show } = await setup();
+    const segment = await segmentFor(user.organisationId);
+    await testPrisma.campaign.updateMany({ data: { targetSegmentIds: [segment.id] } });
+    await testPrisma.audienceSegment.delete({ where: { id: segment.id } });
+
+    expect(await decide(show.id, { viewerId: 'stranger', consent: false })).toBeNull();
+  });
+
+  it('keeps a campaign running on the audiences it has left', async () => {
+    const { user, show } = await setup();
+    const kept = await segmentFor(user.organisationId);
+    const gone = await segmentFor(user.organisationId);
+    await testPrisma.campaign.updateMany({ data: { targetSegmentIds: [kept.id, gone.id] } });
+    await testPrisma.audienceSegment.delete({ where: { id: gone.id } });
+    await noteViewedGenre('fan', 'Sports', true);
+    await noteViewedGenre('fan', 'Sports', true);
+
+    expect(await decide(show.id, { viewerId: 'fan', consent: true })).not.toBeNull();
+    expect(await decide(show.id, { viewerId: 'stranger', consent: false })).toBeNull();
+  });
+
+  it('refuses to delete an audience a campaign still uses', async () => {
+    const { user, campaign } = await setup({ status: 'PAUSED' });
+    const segment = await segmentFor(user.organisationId);
+    await testPrisma.campaign.updateMany({ data: { targetSegmentIds: [segment.id] } });
+    const token = await login(user);
+
+    const refused = await request(app)
+      .delete(`/segments/${segment.id}`)
+      .set('Authorization', token);
+    expect(refused.status).toBe(409);
+    expect(await testPrisma.audienceSegment.count()).toBe(1);
+
+    await testPrisma.campaign.update({
+      where: { id: campaign.id },
+      data: { status: 'COMPLETED' },
+    });
+    const allowed = await request(app)
+      .delete(`/segments/${segment.id}`)
+      .set('Authorization', token);
+    expect(allowed.status).toBe(204);
   });
 
   it('keeps segments private to their organisation', async () => {

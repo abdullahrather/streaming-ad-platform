@@ -57,12 +57,12 @@ const deliveryDefaults = {
   competitiveCategory: delivery.competitiveCategory.default(''),
 };
 
-const hasDailyTarget = (value: {
+export const hasDailyTarget = (value: {
   pacingMode?: PacingMode | undefined;
   dailyImpressionTarget?: number | null | undefined;
 }): boolean => value.pacingMode !== PacingMode.CUSTOM || Boolean(value.dailyImpressionTarget);
 
-const DAILY_TARGET_ERROR = {
+export const DAILY_TARGET_ERROR = {
   error: 'Custom pacing needs a daily impression target.',
   path: ['dailyImpressionTarget'],
 };

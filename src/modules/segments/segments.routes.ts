@@ -65,8 +65,16 @@ segmentsRouter.delete(
   requireWriteAccess,
   handle(async (req, res) => {
     const actor = actorOf(req);
+    const id = req.params['id'] as string;
+    const organisationId = actor.organisationId ?? '';
+
+    const inUse = await prisma.campaign.count({
+      where: { organisationId, targetSegmentIds: { has: id }, status: { not: 'COMPLETED' } },
+    });
+    if (inUse > 0) throw new AppError(409, 'Campaigns still use this audience.');
+
     const { count } = await prisma.audienceSegment.deleteMany({
-      where: { id: req.params['id'] as string, organisationId: actor.organisationId ?? '' },
+      where: { id, organisationId },
     });
     if (count === 0) throw new AppError(404, 'Segment not found.');
 

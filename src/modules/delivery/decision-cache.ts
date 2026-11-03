@@ -110,7 +110,13 @@ const load = async (): Promise<DecisionSnapshot> => {
   });
   const segmentsById = new Map(segments.map((segment) => [segment.id, segment]));
 
-  const campaigns = rows.map((row) => ({
+  // A campaign whose audiences are all gone stops, rather than reaching everyone.
+  const servable = rows.filter(
+    ({ targetSegmentIds }) =>
+      targetSegmentIds.length === 0 || targetSegmentIds.some((id) => segmentsById.has(id)),
+  );
+
+  const campaigns = servable.map((row) => ({
     id: row.id,
     title: row.title,
     advertiser: row.advertiser,
