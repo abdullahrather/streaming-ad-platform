@@ -18,16 +18,16 @@ The dashboard shows a range of ±15% and warns when inventory, budget or limits 
 
 | Targeting | Forecast | Actual | Error |
 |---|---|---|---|
-| Everything | 12,615,067 | 13,260,565 | 4.9% |
-| Germany | 4,413,871 | 4,640,101 | 4.9% |
-| Sports | 2,868,492 | 3,368,453 | 14.8% |
-| Connected TV | 6,307,376 | 6,631,705 | 4.9% |
-| Pre-roll on mobile | 1,324,015 | 1,393,107 | 5.0% |
+| Everything | 12,616,272 | 13,235,413 | 4.7% |
+| Germany | 4,414,295 | 4,631,270 | 4.7% |
+| Sports | 2,868,720 | 3,363,425 | 14.7% |
+| Connected TV | 6,307,986 | 6,619,064 | 4.7% |
+| Pre-roll on mobile | 1,324,132 | 1,390,476 | 4.8% |
 | Evenings, 18:00 to 22:59 | 6,622,581 | 7,181,073 | 7.8% |
 | Weekends | 4,634,480 | 4,478,903 | 3.5% |
-| Drama in France | 731,124 | 743,766 | 1.7% |
+| Drama in France | 731,205 | 742,190 | 1.5% |
 
-The average error is 5.9%. Sports is the hardest case, because big match nights can't be predicted from previous weeks.
+The average error is 5.8%. Sports is the hardest case, because big match nights can't be predicted from previous weeks. The seed starts from the current hour, so these figures move by a few tenths of a percent each time it runs.
 
 ## Limits of these results
 
@@ -35,4 +35,4 @@ The average error is 5.9%. Sports is the hardest case, because big match nights 
 - The backtest uses one seeded history, so the numbers show how this method behaves rather than proving how it would perform everywhere.
 - The backtest checks available impressions. It doesn't run a campaign through real days to compare final delivery.
 - The reach formula hasn't been checked against real viewer behaviour. Real viewers watch unevenly, so actual reach would usually come in lower.
-- Forecasts for auction campaigns assume they can use anything guaranteed campaigns haven't booked, regardless of rival bids.
+- Forecasts for auction campaigns assume they can use anything guaranteed campaigns haven't booked, regardless of rival bids. A bid under the auction floor is forecast at zero, with a warning.

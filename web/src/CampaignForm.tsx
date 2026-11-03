@@ -28,6 +28,7 @@ const WEEKDAYS: Array<[string, string]> = [
 
 const WARNINGS: Record<string, string> = {
   NO_HISTORY: 'There is no traffic history for this targeting yet.',
+  BID_BELOW_FLOOR: 'This bid is under the auction minimum, so the campaign won’t deliver.',
   NOT_ENOUGH_INVENTORY: 'There may not be enough matching traffic to reach the goal.',
   BUDGET_BELOW_GOAL: 'This budget buys fewer impressions than the goal.',
   LIMITS_BELOW_GOAL: 'Your daily limits or frequency cap are below what the goal needs.',
