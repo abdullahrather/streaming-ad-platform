@@ -23,6 +23,10 @@ campaignsRouter.get('/analytics/timeseries', (req, res, next) => {
   void campaignsController.timeseries(req, res, next);
 });
 
+campaignsRouter.post('/forecast', (req, res, next) => {
+  void campaignsController.forecast(req, res, next);
+});
+
 campaignsRouter.get('/', (req, res, next) => {
   void campaignsController.list(req, res, next);
 });

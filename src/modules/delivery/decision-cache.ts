@@ -5,7 +5,7 @@
  * Live delivery counts come from Redis. The snapshot refreshes every few seconds,
  * and straight away when something changes in this process.
  */
-import { CreativeStatus, type Creative } from '@prisma/client';
+import { CreativeStatus, type Creative, type DeliveryType, type PacingMode } from '@prisma/client';
 import { env } from '@/config/env';
 import { prisma } from '@/lib/prisma';
 import { counterKeys, redis } from '@/lib/redis';
@@ -13,14 +13,28 @@ import { counterKeys, redis } from '@/lib/redis';
 // Ads reserved but never reported are given back once a campaign has gone quiet.
 const ABANDONED_RESERVATION_MS = 120_000;
 
+export interface CachedSegment {
+  genres: string[];
+  minViews: number;
+}
+
 export interface CachedCampaign {
   id: string;
   title: string;
   advertiser: string;
   cpmCents: number;
   impressionGoal: number;
-  /** The most impressions it may ever serve: its goal, or what its budget buys. */
-  cap: number;
+  budgetMillicents: number;
+  dailyBudgetMillicents: number;
+  /** Zero means no daily limit. */
+  dailyImpressionLimit: number;
+  frequencyCapPerDay: number;
+  deliveryType: DeliveryType;
+  pacingMode: PacingMode;
+  competitiveCategory: string;
+  activeHours: Set<number>;
+  activeDays: Set<number>;
+  segments: CachedSegment[];
   startsAt: number;
   endsAt: number;
   countries: Set<string>;
@@ -42,9 +56,12 @@ const syncCounters = async (campaigns: CachedCampaign[]): Promise<void> => {
   const totals = await prisma.metric.groupBy({
     by: ['campaignId'],
     where: { campaignId: { in: campaigns.map(({ id }) => id) } },
-    _sum: { impressions: true },
+    _sum: { impressions: true, costMillicents: true },
   });
   const deliveredById = new Map(totals.map((row) => [row.campaignId, row._sum.impressions ?? 0]));
+  const costById = new Map(
+    totals.map((row) => [row.campaignId, Number(row._sum.costMillicents ?? 0)]),
+  );
 
   const setup = redis.pipeline();
   for (const { id } of campaigns) {
@@ -52,6 +69,7 @@ const syncCounters = async (campaigns: CachedCampaign[]): Promise<void> => {
     const delivered = deliveredById.get(id) ?? 0;
     setup.setnx(keys.delivered, delivered);
     setup.setnx(keys.served, delivered);
+    setup.setnx(keys.spent, costById.get(id) ?? 0);
   }
   await setup.exec();
 
@@ -69,6 +87,7 @@ const syncCounters = async (campaigns: CachedCampaign[]): Promise<void> => {
 
     if (served > delivered && Date.now() - lastServed > ABANDONED_RESERVATION_MS) {
       giveBack.set(counterKeys(id).served, delivered);
+      giveBack.set(counterKeys(id).spent, costById.get(id) ?? 0);
     }
   });
   await giveBack.exec();
@@ -84,13 +103,38 @@ const load = async (): Promise<DecisionSnapshot> => {
     prisma.show.findMany({ select: { id: true, genre: true } }),
   ]);
 
-  const campaigns = rows.map((row) => ({
+  const segmentIds = [...new Set(rows.flatMap(({ targetSegmentIds }) => targetSegmentIds))];
+  const segments = await prisma.audienceSegment.findMany({
+    where: { id: { in: segmentIds } },
+    select: { id: true, genres: true, minViews: true },
+  });
+  const segmentsById = new Map(segments.map((segment) => [segment.id, segment]));
+
+  // A campaign whose audiences are all gone stops, rather than reaching everyone.
+  const servable = rows.filter(
+    ({ targetSegmentIds }) =>
+      targetSegmentIds.length === 0 || targetSegmentIds.some((id) => segmentsById.has(id)),
+  );
+
+  const campaigns = servable.map((row) => ({
     id: row.id,
     title: row.title,
     advertiser: row.advertiser,
     cpmCents: row.cpmCents,
     impressionGoal: row.impressionGoal,
-    cap: Math.min(row.impressionGoal, Math.floor((row.budgetCents * 1000) / row.cpmCents)),
+    budgetMillicents: row.budgetCents * 1000,
+    dailyBudgetMillicents: (row.dailyBudgetCents ?? 0) * 1000,
+    dailyImpressionLimit: row.pacingMode === 'CUSTOM' ? (row.dailyImpressionTarget ?? 0) : 0,
+    frequencyCapPerDay: row.frequencyCapPerDay ?? 0,
+    deliveryType: row.deliveryType,
+    pacingMode: row.pacingMode,
+    competitiveCategory: row.competitiveCategory,
+    activeHours: new Set(row.activeHours),
+    activeDays: new Set(row.activeDays),
+    segments: row.targetSegmentIds.flatMap((id) => {
+      const segment = segmentsById.get(id);
+      return segment ? [segment] : [];
+    }),
     startsAt: row.startsAt.getTime(),
     endsAt: row.endsAt.getTime(),
     countries: new Set(row.targetCountries),

@@ -12,7 +12,12 @@ import {
   updateProfileSchema,
 } from '@/modules/account/account.routes';
 import { suspendSchema } from '@/modules/admin/admin.routes';
-import { reviewSchema, uploadCreativeSchema } from '@/modules/creatives/creatives.schema';
+import {
+  reviewSchema,
+  updateCreativeSchema,
+  uploadCreativeSchema,
+} from '@/modules/creatives/creatives.schema';
+import { createSegmentSchema } from '@/modules/segments/segments.routes';
 import {
   emailSchema,
   loginSchema,
@@ -22,7 +27,11 @@ import {
   tokenSchema,
   twoFactorChallengeSchema,
 } from '@/modules/auth/auth.schema';
-import { createCampaignSchema, updateCampaignSchema } from '@/modules/campaigns/campaigns.schema';
+import {
+  createCampaignSchema,
+  forecastSchema,
+  updateCampaignSchema,
+} from '@/modules/campaigns/campaigns.schema';
 import { eventBatchSchema, playerTokenSchema } from '@/modules/delivery/delivery.schema';
 import {
   acceptInvitationSchema,
@@ -116,6 +125,7 @@ export const openApiDocument = {
     { name: 'Analytics', description: 'Measuring performance' },
     { name: 'Catalogue', description: 'Shows that ads can run against' },
     { name: 'Creatives', description: 'Video ads and their review' },
+    { name: 'Audiences', description: 'Segments built from viewing interests' },
     { name: 'Playback', description: 'Public endpoints used by video players' },
     { name: 'Ad server', description: 'Used by the ad server or player, with an API key' },
   ],
@@ -514,7 +524,52 @@ export const openApiDocument = {
         responses: responses('201', 'Uploaded', '401', '403', '404', '413', '422'),
       },
     },
+    '/campaigns/forecast': {
+      post: {
+        ...dashboard('Analytics'),
+        summary: 'Predict delivery and reach before launching',
+        requestBody: jsonBody(forecastSchema),
+        responses: responses('200', 'The forecast', '401', '422'),
+      },
+    },
+    '/segments': {
+      get: {
+        ...dashboard('Audiences'),
+        summary: "List your organisation's audience segments",
+        responses: responses('200', 'Segments', '401'),
+      },
+      post: {
+        ...dashboard('Audiences'),
+        summary: 'Create an audience segment from viewing interests',
+        description: 'Segments only ever match viewers who consented.',
+        requestBody: jsonBody(createSegmentSchema),
+        responses: responses('201', 'Created', '401', '403', '409', '422'),
+      },
+    },
+    '/segments/{id}': {
+      delete: {
+        ...dashboard('Audiences'),
+        summary: 'Delete an audience segment',
+        parameters: [pathId('id', 'Segment ID')],
+        responses: responses('204', 'Deleted', '401', '403', '404', '409'),
+      },
+    },
+    '/player/profile': {
+      delete: {
+        tags: ['Playback'],
+        summary: "Delete a viewer's interest profile",
+        parameters: [query('token', 'Player token', true)],
+        responses: responses('204', 'Deleted', '401'),
+      },
+    },
     '/creatives/{id}': {
+      patch: {
+        ...dashboard('Creatives'),
+        summary: "Set an ad's share of its campaign",
+        parameters: [pathId('id', 'Ad ID')],
+        requestBody: jsonBody(updateCreativeSchema),
+        responses: responses('204', 'Updated', '401', '403', '404', '422'),
+      },
       delete: {
         ...dashboard('Creatives'),
         summary: 'Delete a video ad',

@@ -18,6 +18,10 @@ Built with Node.js, TypeScript, Express, Prisma, PostgreSQL, Redis and FFmpeg, w
 |---|---|
 | ![An ad playing in the demo player, with its live event log](./docs/images/player.png) | ![Admins approve ads before they can run](./docs/images/ad-review.png) |
 
+| Live forecast | A/B test results |
+|---|---|
+| ![The campaign form with its live forecast](./docs/images/campaign-form.png) | ![Two ads compared, with a confident winner](./docs/images/ab-test.png) |
+
 | Team management | Admin console |
 |---|---|
 | ![Team members, roles and invitations](./docs/images/team.png) | ![Users, organisations and platform activity](./docs/images/admin.png) |
@@ -90,11 +94,32 @@ Run with `SIMULATE=0` to turn off demo traffic, and the dashboard shows only wha
 | **CPM** | The price per 1,000 impressions. |
 | **Creative** | The video ad itself. A campaign can have several, and one is picked at random. |
 | **VAST** | The ad industry's standard XML format, which tells a video player what to play and where to report. |
+| **Reach** | How many different viewers saw a campaign. |
+| **Frequency** | How many times the average viewer saw it. |
+| **Second-price auction** | The highest bid wins, but pays only just above the next bid. |
 | **Quartile** | The 25%, 50% and 75% points of an ad, used to see where viewers stop watching. |
 | **Ad slot** | Pre-roll (before the episode), mid-roll (during) or post-roll (after). |
 | **Flight** | The dates a campaign runs. |
 | **Impression goal** | The number of impressions the advertiser bought. |
 | **Pacing** | Delivery so far compared with an even schedule. Behind means the campaign may miss its goal. |
+
+### Campaign controls
+
+| Control | What it does |
+|---|---|
+| **Forecast** | Shows expected impressions and reach as you build a campaign, then tracks delivery against it |
+| **Frequency cap** | Limits how many times one viewer sees a campaign in a day |
+| **Schedule** | Runs ads at chosen times of day and on chosen days |
+| **Pacing** | Spreads delivery evenly, spends as fast as possible, or aims for a daily target |
+| **Daily budget** | Stops spending for the day at a set amount |
+| **Audiences** | Targets people by what they watch, only if they consented |
+| **Competitive separation** | Keeps brands in the same category out of the same ad break |
+| **A/B tests** | Splits delivery between ads and only names a winner at 95% confidence |
+| **Auctions** | Bids for traffic guaranteed campaigns don't need, paying just above the next bid. Bids under `AUCTION_FLOOR_CPM_CENTS` don't compete |
+
+These limits are checked in the same atomic step that reserves the ad, so they hold under concurrent traffic. See [how forecasts work](./docs/forecasting.md).
+
+Viewing profiles exist only for viewers who consented. They expire after 90 days, and a viewer can delete theirs at any time.
 
 ### Accounts and teams
 
@@ -112,7 +137,9 @@ Emails appear in the **local mailbox** at `/#/mailbox`, so all of this works wit
 
 ### How an ad gets chosen
 
-For each ad break, `/ad-decision` keeps campaigns that are active, inside their dates, under their goal and budget, and matching the country, device, slot and show genre. It then picks the one furthest behind schedule, with the higher CPM winning ties. A campaign is marked completed when it reaches its goal or budget, or passes its end date.
+For each ad break, the platform keeps campaigns that are active, inside their dates and schedule, under their limits, and matching the country, device, slot, show genre and audience.
+
+Guaranteed campaigns behind schedule go first, furthest behind first. Auction campaigns then compete for the rest. Guaranteed campaigns ahead of schedule come last, and even-paced ones wait. A campaign is marked completed when it reaches its goal or budget, or passes its end date.
 
 Real players use `/vast`, which only considers campaigns with an approved ad. `/ad-decision` also includes campaigns without one, which lets ad servers and demo traffic run on numbers alone.
 
@@ -185,11 +212,13 @@ Dashboard routes need `Authorization: Bearer <token>` from login. Ad server rout
 | `GET` | `/auth/me` | Your profile and organisations |
 | `GET` | `/creatives` | List a campaign's video ads |
 | `POST` | `/creatives` | Upload a video ad |
+| `PATCH` | `/creatives/:id` | Change an ad's share of delivery |
 | `POST` | `/player-tokens` | Exchange the ad server key for a player token |
 | `GET` | `/vast` | Get an ad as VAST XML, for video players |
 | `GET` | `/track/{event}` | Report ad progress, with a signed link from the VAST |
 | `GET` | `/click` | Record a click and redirect |
 | `GET` | `/player/catalogue` | Shows the demo site can play |
+| `DELETE` | `/player/profile` | Delete a viewer's viewing profile |
 | | `/account/*` | Password, devices and two-factor settings |
 | | `/team/*` | Members, invitations and activity |
 | | `/admin/*` | The admin console |
@@ -201,6 +230,9 @@ Dashboard routes need `Authorization: Bearer <token>` from login. Ad server rout
 | `GET` | `/campaigns/analytics` | Totals, pacing and spend per campaign, with `from` and `to` |
 | `GET` | `/campaigns/analytics/timeseries` | Performance over time across campaigns |
 | `GET` | `/campaigns/:id/analytics` | One campaign with its trend and breakdowns |
+| `POST` | `/campaigns/forecast` | Predict delivery and reach before launching |
+| `GET` | `/segments` | List audience segments |
+| `POST` | `/segments` | Create an audience segment |
 | `GET` | `/shows` | The show catalogue |
 | `GET` | `/ad-decision` | Choose an ad: `showId`, `slot`, `country`, `device` |
 | `POST` | `/events` | Queue a batch of ad events, each with an `eventId` and `occurredAt` |
@@ -212,7 +244,7 @@ prisma/          Database schema, migrations and demo data
 scripts/         Local database and dev startup
 src/lib/         Storage, video conversion, email, security
 src/modules/     account, admin, audit, auth, campaigns, creatives, delivery, demo, dev, docs,
-                 playback, shows, team
+                 playback, segments, shows, team
 src/middleware/  Sign-in and permission guards, API key guard, error handling
 tests/           Integration tests against a real PostgreSQL
 web/             The React dashboard, the demo streaming site and the player SDK
@@ -230,6 +262,7 @@ web/             The React dashboard, the demo streaming site and the player SDK
 | `npm run typecheck` | Check TypeScript types |
 | `npm run build` | Compile the API |
 | `npm run load:test` | Run the load test and check the totals |
+| `npm run forecast:check` | Test forecast accuracy against held-out history |
 | `npm run db:seed` | Replace all data with fresh demo data |
 | `npm run db:studio` | Browse the database in Prisma Studio |
 
@@ -253,6 +286,8 @@ This is a working demonstration, not a system that has run under real load.
 
 - Videos are stored on local disk and streamed by the app, with no CDN or adaptive quality. The storage layer is ready for cloud storage.
 - The demo player takes its country and device from a menu, where a real service would detect them.
+- Forecasts are tested against generated history, and the reach estimate hasn't been checked against real viewers. See [how forecasts work](./docs/forecasting.md).
+- Schedules and daily limits use one platform time zone, set by `PLATFORM_TIMEZONE`.
 - A reserved ad that never plays is only returned after its campaign has been quiet for two minutes, so a campaign near its limit can briefly under-deliver.
 - Dashboard totals lag slightly behind live traffic, because events pass through the queue first.
 - `/ad-decision` and `/events` share one API key, which suits a trusted ad server.

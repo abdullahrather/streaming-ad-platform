@@ -213,6 +213,20 @@ select {
   font-size: 0.8rem;
 }
 
+.panel .consent {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--ink);
+}
+
+.panel .text-button {
+  margin: 0;
+  font-size: 0.75rem;
+  text-align: left;
+  text-decoration: underline;
+}
+
 .panel select {
   padding: 0.35rem;
   border: 1px solid var(--border);

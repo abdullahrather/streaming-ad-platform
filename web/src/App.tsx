@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { AccountPage } from './account';
 import { AdminPage, MailboxPage } from './admin';
+import { AudiencesPage } from './audiences';
 import { api, setExpiredHandler, type User } from './api';
 import { ReviewPage } from './creatives';
 import {
@@ -126,6 +127,9 @@ const App = () => {
     if (route.path === '/activity' && seesActivity) {
       return <ActivityPage key={user.organisationId} />;
     }
+    if (route.path === '/audiences' && hasOrganisation && !isGuest) {
+      return <AudiencesPage key={user.organisationId} user={user} />;
+    }
     if (route.path === '/account' && !isGuest) {
       return <AccountPage user={user} onChanged={reloadUser} />;
     }
@@ -138,6 +142,7 @@ const App = () => {
 
   const links = [
     { path: '/', label: 'Overview', show: true },
+    { path: '/audiences', label: 'Audiences', show: hasOrganisation && !isGuest },
     { path: '/team', label: 'Team', show: hasOrganisation && !isGuest },
     { path: '/activity', label: 'Activity', show: seesActivity },
     { path: '/account', label: 'Account', show: !isGuest },

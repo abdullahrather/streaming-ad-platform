@@ -29,6 +29,7 @@ export default defineConfig({
         '/media',
         '/openapi.json',
         '/player',
+        '/segments',
         '/shows',
         '/team',
         '/track',

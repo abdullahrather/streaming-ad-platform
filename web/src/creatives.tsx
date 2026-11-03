@@ -13,6 +13,26 @@ const STATUS: Record<CreativeStatus, { label: string; tone: string }> = {
 
 const REFRESH_MS = 2000;
 
+const COMPARISON: Record<NonNullable<Creative['comparison']>, string> = {
+  LEADING: 'Winning, with 95% confidence',
+  BEHIND: 'Losing, with 95% confidence',
+  TOO_CLOSE: 'Too close to call',
+  NOT_ENOUGH_DATA: 'Needs at least 1,000 impressions per ad',
+};
+
+const Results = ({ creative }: { creative: Creative }) => {
+  const { results, comparison } = creative;
+  if (!results || results.impressions === 0) return null;
+
+  return (
+    <p className="small">
+      {results.impressions.toLocaleString('en')} impressions · {(results.ctr * 100).toFixed(2)}% CTR
+      · {Math.round(results.completionRate * 100)}% finished
+      {comparison && <span className="muted"> · {COMPARISON[comparison]}</span>}
+    </p>
+  );
+};
+
 const CreativeBadge = ({ status }: { status: CreativeStatus }) => {
   const { label, tone } = STATUS[status];
   return <span className={`badge badge-${tone}`}>{label}</span>;
@@ -149,6 +169,24 @@ export const CampaignAds = ({ campaignId, canEdit }: { campaignId: string; canEd
                   <span className="muted small">{Math.round(creative.durationSeconds)}s</span>
                 )}
               </div>
+              <Results creative={creative} />
+              {canEdit && creative.status === 'APPROVED' && (
+                <label className="share">
+                  Share of delivery
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    defaultValue={creative.weight}
+                    onBlur={(event) => {
+                      api
+                        .setCreativeWeight(creative.id, Number(event.target.value))
+                        .then(load)
+                        .catch((reason: ApiError) => setError(firstError(reason)));
+                    }}
+                  />
+                </label>
+              )}
               {creative.rejectionReason && (
                 <p className="small">Reviewer: {creative.rejectionReason}</p>
               )}

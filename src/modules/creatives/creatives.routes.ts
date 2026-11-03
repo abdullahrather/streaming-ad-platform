@@ -14,7 +14,11 @@ import { storage } from '@/lib/storage';
 import { authenticate, requireWriteAccess } from '@/middleware/authenticate';
 import { AppError } from '@/middleware/errorHandler';
 import { auditService } from '@/modules/audit/audit.service';
-import { campaignQuerySchema, uploadCreativeSchema } from './creatives.schema';
+import {
+  campaignQuerySchema,
+  updateCreativeSchema,
+  uploadCreativeSchema,
+} from './creatives.schema';
 import { creativesService } from './creatives.service';
 
 const upload = multer({
@@ -80,6 +84,16 @@ creativesRouter.post(
       ipAddress: contextOf(req).ipAddress,
     });
     res.status(201).json({ status: 'success', data: creativesService.toView(creative) });
+  }),
+);
+
+creativesRouter.patch(
+  '/:id',
+  requireWriteAccess,
+  handle(async (req, res) => {
+    const { weight } = updateCreativeSchema.parse(req.body);
+    await creativesService.setWeight(actorOf(req), req.params['id'] as string, weight);
+    res.status(204).end();
   }),
 );
 

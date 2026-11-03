@@ -6,15 +6,18 @@
  */
 import { Request, Response, NextFunction } from 'express';
 import { actorOf, contextOf } from '@/lib/http';
+import { reachKey, redis } from '@/lib/redis';
 import { auditService } from '@/modules/audit/audit.service';
 import { creativesService } from '@/modules/creatives/creatives.service';
 import {
   createCampaignSchema,
   dateRangeSchema,
+  forecastSchema,
   listCampaignsQuerySchema,
   updateCampaignSchema,
 } from './campaigns.schema';
 import { campaignsService } from './campaigns.service';
+import { forecastCampaign } from './forecast.service';
 
 const idOf = (req: Request): string => req.params['id'] as string;
 
@@ -49,6 +52,17 @@ export class CampaignsController {
       });
 
       res.status(201).json({ status: 'success', data: campaign });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /** POST /campaigns/forecast */
+  async forecast(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const data = await forecastCampaign(forecastSchema.parse(req.body));
+
+      res.status(200).json({ status: 'success', data });
     } catch (error) {
       next(error);
     }
@@ -145,6 +159,7 @@ export class CampaignsController {
 
       const breakdown = await campaignsService.getBreakdown(id, actor, range);
       const filtered = await campaignsService.getFiltered(id, range);
+      const reach = await redis.pfcount(reachKey(id));
       const [[campaign], timeseries] = await Promise.all([
         campaignsService.getAnalytics(actor, range, id),
         campaignsService.getTimeseries(actor, range, id),
@@ -152,7 +167,7 @@ export class CampaignsController {
 
       res
         .status(200)
-        .json({ status: 'success', data: { campaign, timeseries, breakdown, filtered } });
+        .json({ status: 'success', data: { campaign, timeseries, breakdown, filtered, reach } });
     } catch (error) {
       next(error);
     }

@@ -16,6 +16,8 @@ export const uploadCreativeSchema = z.object({
   }),
 });
 
+export const updateCreativeSchema = z.object({ weight: z.number().int().min(0).max(100) });
+
 export const campaignQuerySchema = z.object({ campaignId: z.string().min(1) });
 
 export const reviewQueueSchema = z.object({

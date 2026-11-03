@@ -48,6 +48,19 @@ enum CampaignStatus {
   COMPLETED
 }
 
+/// Guaranteed campaigns buy a fixed goal. Auction campaigns bid for what's left.
+enum DeliveryType {
+  GUARANTEED
+  AUCTION
+}
+
+/// ASAP spends as fast as it can, EVEN spreads over the flight, CUSTOM aims for a daily target.
+enum PacingMode {
+  ASAP
+  EVEN
+  CUSTOM
+}
+
 /// Where an ad runs inside an episode.
 enum AdSlot {
   PRE_ROLL
@@ -108,6 +121,7 @@ model Organisation {
   campaigns   Campaign[]
   invitations Invitation[]
   sessions    Session[]
+  segments    AudienceSegment[]
 
   @@map("organisations")
 }
@@ -230,23 +244,38 @@ model Show {
 /// An advertising campaign owned by an Organisation. userId is whoever created it.
 /// Empty target lists mean "all".
 model Campaign {
-  id              String         @id @default(cuid())
-  organisationId  String         @map("organisation_id")
-  userId          String         @map("user_id")
-  title           String
-  advertiser      String
-  status          CampaignStatus @default(ACTIVE)
-  budgetCents     Int            @map("budget_cents")
-  cpmCents        Int            @map("cpm_cents")
-  impressionGoal  Int            @map("impression_goal")
-  startsAt        DateTime       @map("starts_at") @db.Timestamptz(3)
-  endsAt          DateTime       @map("ends_at") @db.Timestamptz(3)
-  targetCountries String[]       @default([]) @map("target_countries")
-  targetGenres    String[]       @default([]) @map("target_genres")
-  targetDevices   Device[]       @default([]) @map("target_devices")
-  targetSlots     AdSlot[]       @default([]) @map("target_slots")
-  createdAt       DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt       DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
+  id                    String         @id @default(cuid())
+  organisationId        String         @map("organisation_id")
+  userId                String         @map("user_id")
+  title                 String
+  advertiser            String
+  status                CampaignStatus @default(ACTIVE)
+  budgetCents           Int            @map("budget_cents")
+  cpmCents              Int            @map("cpm_cents")
+  impressionGoal        Int            @map("impression_goal")
+  startsAt              DateTime       @map("starts_at") @db.Timestamptz(3)
+  endsAt                DateTime       @map("ends_at") @db.Timestamptz(3)
+  targetCountries       String[]       @default([]) @map("target_countries")
+  targetGenres          String[]       @default([]) @map("target_genres")
+  targetDevices         Device[]       @default([]) @map("target_devices")
+  targetSlots           AdSlot[]       @default([]) @map("target_slots")
+  targetSegmentIds      String[]       @default([]) @map("target_segment_ids")
+  deliveryType          DeliveryType   @default(GUARANTEED) @map("delivery_type")
+  pacingMode            PacingMode     @default(ASAP) @map("pacing_mode")
+  dailyBudgetCents      Int?           @map("daily_budget_cents")
+  dailyImpressionTarget Int?           @map("daily_impression_target")
+  /// Most times one viewer sees this campaign in a day.
+  frequencyCapPerDay    Int?           @map("frequency_cap_per_day")
+  /// Hours (0-23) and weekdays (0 is Sunday) to run in. Empty means all.
+  activeHours           Int[]          @default([]) @map("active_hours")
+  activeDays            Int[]          @default([]) @map("active_days")
+  /// Brands in the same category never run in the same ad break.
+  competitiveCategory   String         @default("") @map("competitive_category")
+  /// What was predicted when the campaign was created.
+  forecastImpressions   Int?           @map("forecast_impressions")
+  forecastReach         Int?           @map("forecast_reach")
+  createdAt             DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt             DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -265,6 +294,8 @@ model Creative {
   campaignId      String         @map("campaign_id")
   name            String
   clickUrl        String         @map("click_url")
+  /// Relative share of the campaign's impressions.
+  weight          Int            @default(1)
   status          CreativeStatus @default(PROCESSING)
   /// Storage keys. The original is removed after conversion.
   originalKey     String         @default("") @map("original_key")
@@ -282,11 +313,66 @@ model Creative {
   createdAt       DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt       DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  campaign Campaign         @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  metrics  CreativeMetric[]
 
   @@index([campaignId, status])
   @@index([status, createdAt])
   @@map("creatives")
+}
+
+/// Hourly results for each ad, used to compare them.
+model CreativeMetric {
+  creativeId  String   @map("creative_id")
+  bucket      DateTime @db.Timestamptz(3)
+  impressions Int      @default(0)
+  clicks      Int      @default(0)
+  completions Int      @default(0)
+
+  creative Creative @relation(fields: [creativeId], references: [id], onDelete: Cascade)
+
+  @@id([creativeId, bucket])
+  @@map("creative_metrics")
+}
+
+/// Viewers grouped by what they watch. Only includes viewers who consented.
+model AudienceSegment {
+  id             String   @id @default(cuid())
+  organisationId String   @map("organisation_id")
+  name           String
+  genres         String[]
+  /// Ads seen in these genres before a viewer qualifies.
+  minViews       Int      @default(3) @map("min_views")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+
+  @@index([organisationId])
+  @@map("audience_segments")
+}
+
+/// Hourly ad requests, served or not, which is what forecasts are built from.
+model InventoryHour {
+  bucket   DateTime @db.Timestamptz(3)
+  genre    String
+  slot     AdSlot
+  country  String   @db.Char(2)
+  device   Device
+  requests Int      @default(0)
+
+  @@id([bucket, genre, slot, country, device])
+  @@map("inventory_hours")
+}
+
+/// Estimated viewers each day, for turning impressions into reach.
+model AudienceDay {
+  day       String @id
+  viewers   Int    @default(0)
+  consented Int    @default(0)
+  /// Everyone seen so far, up to and including this day.
+  allTime   Int    @default(0) @map("all_time")
+
+  @@map("audience_days")
 }
 
 /// Queue entries already written to metrics, so a redelivered entry changes nothing.
@@ -322,6 +408,8 @@ model Metric {
   bucket         DateTime @db.Timestamptz(3)
   impressions    Int      @default(0)
   clicks         Int      @default(0)
+  /// What the impressions really cost. Auctions can clear below the CPM.
+  costMillicents BigInt   @default(0) @map("cost_millicents")
   /// How many viewers reached 25%, 50% and 75% of the ad.
   firstQuartiles Int      @default(0) @map("first_quartiles")
   midpoints      Int      @default(0)

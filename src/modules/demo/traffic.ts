@@ -13,6 +13,7 @@ import { prisma } from '@/lib/prisma';
 import { env } from '@/config/env';
 import { deliveryService } from '@/modules/delivery/delivery.service';
 import { enqueueEvents, type QueuedEvent } from '@/modules/delivery/event-queue';
+import { noteViewedGenre } from '@/modules/delivery/viewer-activity';
 import { AdSlot, Device } from '@prisma/client';
 import { isActive } from './activity';
 
@@ -40,9 +41,15 @@ const DEVICES = [
 const CLICK_RATE: Record<Device, number> = { CTV: 0.003, MOBILE: 0.02, WEB: 0.014, TABLET: 0.011 };
 const COMPLETION_RATE: Record<AdSlot, number> = { PRE_ROLL: 0.78, MID_ROLL: 0.93, POST_ROLL: 0.55 };
 
+const VIEWER_POOL = 5000;
+const CONSENT_RATE = 0.7;
+
 const pick = <T>(list: readonly T[]): T => list[Math.floor(Math.random() * list.length)] as T;
 
-async function serveAdBreak(showIds: string[]): Promise<QueuedEvent[]> {
+async function serveAdBreak(
+  showIds: string[],
+  genres: Map<string, string>,
+): Promise<QueuedEvent[]> {
   const placement = {
     showId: pick(showIds),
     slot: pick(SLOTS),
@@ -50,13 +57,29 @@ async function serveAdBreak(showIds: string[]): Promise<QueuedEvent[]> {
     device: pick(DEVICES),
   };
 
-  const decision = await deliveryService.decide(placement);
+  const viewerNumber = Math.floor(Math.random() * VIEWER_POOL);
+  const viewerId = `demo-viewer-${viewerNumber}`;
+  const consent = viewerNumber < VIEWER_POOL * CONSENT_RATE;
+  const breakId = crypto.randomUUID();
+
+  const decision = await deliveryService.decide(placement, {
+    viewerId,
+    breakId,
+    consent,
+    requireCreative: true,
+  });
   if (!decision) return [];
+
+  const genre = genres.get(placement.showId);
+  if (genre) await noteViewedGenre(viewerId, genre, consent);
 
   const event = (type: QueuedEvent['type']): QueuedEvent => ({
     ...placement,
     type,
     campaignId: decision.campaignId,
+    creativeId: decision.creative?.id,
+    viewerId,
+    priceCpmCents: decision.priceCpmCents,
     eventId: crypto.randomUUID(),
     occurredAt: new Date(),
   });
@@ -82,12 +105,13 @@ async function serveAdBreak(showIds: string[]): Promise<QueuedEvent[]> {
 
 /** Plays one round of ad breaks and returns the number of events stored. */
 export async function runTrafficTick(): Promise<number> {
-  const shows = await prisma.show.findMany({ select: { id: true } });
+  const shows = await prisma.show.findMany({ select: { id: true, genre: true } });
   if (shows.length === 0) return 0;
 
   const showIds = shows.map((show) => show.id);
+  const genres = new Map(shows.map(({ id, genre }) => [id, genre]));
   const breaks = await Promise.all(
-    Array.from({ length: AD_BREAKS_PER_TICK }, () => serveAdBreak(showIds)),
+    Array.from({ length: AD_BREAKS_PER_TICK }, () => serveAdBreak(showIds, genres)),
   );
 
   const events = breaks.flat();

@@ -17,7 +17,8 @@
     "db:studio": "node scripts/with-db.mjs node_modules/prisma/build/index.js studio",
     "typecheck": "tsc --noEmit",
     "format:check": "prettier --check \"src/**/*.ts\" \"tests/**/*.ts\"",
-    "load:test": "node scripts/load-test.mjs"
+    "load:test": "node scripts/load-test.mjs",
+    "forecast:check": "node scripts/with-db.mjs node_modules/tsx/dist/cli.mjs scripts/forecast-check.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.14.0",

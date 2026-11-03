@@ -16,13 +16,16 @@ import { storage } from '@/lib/storage';
 import { AppError } from '@/middleware/errorHandler';
 import { requireIngestKey } from '@/middleware/ingestKey';
 import {
+  adContextSchema,
   adDecisionQuerySchema,
   playerTokenSchema,
   type AdDecisionQuery,
   type EventType,
 } from '@/modules/delivery/delivery.schema';
+import { decisionCache } from '@/modules/delivery/decision-cache';
 import { deliveryService } from '@/modules/delivery/delivery.service';
 import { enqueueEvents, enqueueFiltered } from '@/modules/delivery/event-queue';
+import { deleteViewerProfile, noteViewedGenre } from '@/modules/delivery/viewer-activity';
 import { isBot, isExcessive, isImpossibleCompletion, type FilterReason } from './traffic-quality';
 import { buildVast, emptyVast } from './vast';
 
@@ -44,6 +47,9 @@ interface TrackingClaims extends AdDecisionQuery {
   creativeId: string;
   durationSeconds: number;
   viewerId: string;
+  consent: boolean;
+  genre: string;
+  priceCpmCents: number;
   jti: string;
   iat: number;
 }
@@ -93,6 +99,9 @@ const record = (claims: TrackingClaims, type: EventType, name: string): Promise<
       country: claims.country,
       device: claims.device,
       occurredAt: new Date(),
+      creativeId: claims.creativeId,
+      viewerId: claims.viewerId,
+      priceCpmCents: claims.priceCpmCents,
     },
   ]);
 
@@ -103,22 +112,31 @@ const filterEvent = (claims: TrackingClaims, name: string, reason: FilterReason)
     reason,
   });
 
-const issuePlayerToken = (viewerId: string): { token: string; expiresIn: number } => ({
-  token: jwt.sign({}, env.JWT_SECRET, {
+interface PlayerClaims {
+  viewerId: string;
+  consent: boolean;
+}
+
+const issuePlayerToken = ({
+  viewerId,
+  consent,
+}: PlayerClaims): { token: string; expiresIn: number; viewerId: string } => ({
+  token: jwt.sign({ consent }, env.JWT_SECRET, {
     subject: viewerId,
     audience: PLAYER_AUDIENCE,
     expiresIn: PLAYER_TOKEN_TTL_SECONDS,
   }),
   expiresIn: PLAYER_TOKEN_TTL_SECONDS,
+  viewerId,
 });
 
-const readPlayerToken = (token: unknown): string => {
+const readPlayerToken = (token: unknown): PlayerClaims => {
   try {
     if (typeof token !== 'string') throw new Error('Missing token.');
-    const { sub } = jwt.verify(token, env.JWT_SECRET, {
+    const { sub, consent } = jwt.verify(token, env.JWT_SECRET, {
       audience: PLAYER_AUDIENCE,
     }) as jwt.JwtPayload;
-    return sub as string;
+    return { viewerId: sub as string, consent: consent === true };
   } catch {
     throw new AppError(401, 'A valid player token is required.');
   }
@@ -126,18 +144,33 @@ const readPlayerToken = (token: unknown): string => {
 
 /** For a publisher's server: swaps the ad server key for a short-lived player token. */
 playbackRouter.post('/player-tokens', requireIngestKey, (req, res) => {
-  const { viewerId } = playerTokenSchema.parse(req.body ?? {});
+  const { viewerId, consent } = playerTokenSchema.parse(req.body ?? {});
   res.status(201).json({
     status: 'success',
-    data: issuePlayerToken(viewerId ?? crypto.randomUUID()),
+    data: issuePlayerToken({ viewerId: viewerId ?? crypto.randomUUID(), consent }),
   });
 });
 
 /** Stands in for a publisher's server on the demo site. Closed in production. */
-playbackRouter.post('/player/session', (_req, res) => {
+playbackRouter.post('/player/session', (req, res) => {
   if (env.NODE_ENV === 'production' && !env.DEMO_MODE) throw new AppError(404, 'Not found.');
-  res.status(201).json({ status: 'success', data: issuePlayerToken(crypto.randomUUID()) });
+
+  const { viewerId, consent } = playerTokenSchema.parse(req.body ?? {});
+  res.status(201).json({
+    status: 'success',
+    data: issuePlayerToken({ viewerId: viewerId ?? crypto.randomUUID(), consent }),
+  });
 });
+
+/** Lets a viewer delete their interest profile. */
+playbackRouter.delete(
+  '/player/profile',
+  handle(async (req, res) => {
+    const { viewerId } = readPlayerToken(req.query['token']);
+    await deleteViewerProfile(viewerId);
+    res.status(204).end();
+  }),
+);
 
 /** What the demo streaming site can play. */
 playbackRouter.get(
@@ -175,8 +208,9 @@ playbackRouter.get(
 playbackRouter.get(
   '/vast',
   handle(async (req, res) => {
-    const viewerId = readPlayerToken(req.query['token']);
+    const { viewerId, consent } = readPlayerToken(req.query['token']);
     const query = adDecisionQuerySchema.parse(req.query);
+    const { breakId } = adContextSchema.parse(req.query);
     res.type('application/xml');
 
     const reason: FilterReason | null = isBot(req.get('user-agent'))
@@ -191,7 +225,12 @@ playbackRouter.get(
       return;
     }
 
-    const decision = await deliveryService.decide(query, { requireCreative: true });
+    const decision = await deliveryService.decide(query, {
+      requireCreative: true,
+      viewerId,
+      breakId,
+      consent,
+    });
 
     if (!decision?.creative) {
       res.status(200).send(emptyVast());
@@ -205,6 +244,9 @@ playbackRouter.get(
       creativeId: creative.id,
       durationSeconds: creative.durationSeconds,
       viewerId,
+      consent,
+      genre: (await decisionCache.get()).genreByShow.get(query.showId) ?? '',
+      priceCpmCents: decision.priceCpmCents,
     });
     const origin = originOf(req);
     const track = (event: string): string => `${origin}/track/${event}?t=${token}`;
@@ -252,6 +294,9 @@ playbackRouter.get(
         await filterEvent(claims, name, 'IMPOSSIBLE_TIMING');
       } else {
         await record(claims, type, name);
+        if (name === 'impression') {
+          await noteViewedGenre(claims.viewerId, claims.genre, claims.consent);
+        }
       }
     }
 

@@ -71,6 +71,21 @@ Nothing was lost at any rate. Response times start to climb near 100,000 events 
 
 The small failure rate at 8,000 per second comes from a burst of new connections as the phase starts. Lengthening the connection queue reduced it from 0.688%. Rates above 8,000 per second were not tested.
 
+## After adding campaign rules
+
+Campaign rules made every ad decision do more, so the test was repeated on that code: five minutes at 10,000 events per second, then one minute of decisions at 8,000 per second.
+
+| Measure | Result |
+|---|---|
+| Events accepted | 3,000,100 |
+| Events in the database | 3,000,100 |
+| **Lost or double-counted** | **0** |
+| Event API response time | p95 3.7 ms, p99 5.0 ms |
+| Decisions | 7,968/s, p95 6.2 ms, 0.000% failed |
+| Ads served against a limit of 10,000 | 10,000, from 50,000 racing requests |
+
+Decisions in this test used no frequency cap or audience, so they don't measure the extra Redis reads those add.
+
 ## Limits of these results
 
 - The load generator shared the laptop with the system under test, so a dedicated setup may behave differently.

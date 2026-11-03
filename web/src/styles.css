@@ -515,6 +515,43 @@ a.button {
   gap: 1.25rem;
 }
 
+.forecast {
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--page);
+}
+
+.forecast h3 {
+  margin: 0 0 0.5rem;
+}
+
+.forecast dl {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 0.5rem;
+  margin: 0 0 0.25rem;
+}
+
+.forecast dt {
+  color: var(--ink-2);
+  font-size: 0.75rem;
+}
+
+.forecast dd {
+  margin: 0;
+  font-weight: 600;
+}
+
+.share {
+  max-width: 130px;
+  margin: 0.35rem 0;
+}
+
+select {
+  width: 100%;
+}
+
 .goal {
   display: grid;
   gap: 0.35rem;
@@ -686,6 +723,12 @@ label {
 
 .mail-body {
   margin: 0.5rem 0;
+}
+
+.topbar select,
+.inline-form select,
+td select {
+  width: auto;
 }
 
 select {

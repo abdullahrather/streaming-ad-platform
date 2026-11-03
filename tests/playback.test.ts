@@ -569,6 +569,7 @@ describe('Serving ads through VAST', () => {
     const owner = await createTestUser();
     await createTestShow();
     const campaign = await createTestCampaign(owner.id);
+    await approvedAd(campaign.id, owner.id);
 
     await runTrafficTick();
     await eventQueue.drainEvents();

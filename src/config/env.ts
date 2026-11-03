@@ -39,6 +39,8 @@ const envSchema = z.object({
   DECISION_CACHE_MS: z.coerce.number().int().nonnegative().default(5000),
   MAX_ADS_PER_VIEWER_MINUTE: z.coerce.number().int().positive().default(30),
   MIN_COMPLETION_RATIO: z.coerce.number().nonnegative().default(0.5),
+  PLATFORM_TIMEZONE: z.string().default('Europe/Berlin'),
+  AUCTION_FLOOR_CPM_CENTS: z.coerce.number().int().positive().default(100),
   MEDIA_DIR: z.string().default('.data/media'),
   MAX_UPLOAD_MB: z.coerce.number().int().positive().default(200),
   PLAYER_RATE_LIMIT: z.coerce.number().int().positive().default(1200),

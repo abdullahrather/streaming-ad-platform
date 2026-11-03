@@ -68,6 +68,7 @@ const ACTION_LABELS: Record<string, string> = {
   'creative.deleted': 'Deleted an ad',
   'creative.rejected': 'Rejected an ad',
   'creative.uploaded': 'Uploaded an ad',
+  'segment.created': 'Created an audience',
   'invitation.accepted': 'Accepted an invitation',
   'invitation.revoked': 'Cancelled an invitation',
   'member.invited': 'Invited a member',

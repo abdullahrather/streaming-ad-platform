@@ -279,6 +279,34 @@ export const Breakdown = ({
   );
 };
 
+/** What was promised at launch, against what has happened so far. */
+export const ForecastComparison = ({ campaign, reach }: { campaign: Campaign; reach: number }) => {
+  const { forecastImpressions, forecastReach, lifetimeImpressions } = campaign;
+  if (forecastImpressions === null) return null;
+
+  const rows = [
+    ['Impressions', lifetimeImpressions, forecastImpressions],
+    ['Reach', reach, forecastReach ?? 0],
+  ] as const;
+
+  return (
+    <section className="card">
+      <h2>Forecast against delivery</h2>
+      {rows.map(([label, actual, expected]) => (
+        <div key={label} className="goal">
+          <div className="bar-label">
+            <span>{label}</span>
+            <span className="bar-value">
+              {formatNumber(actual)} of {formatNumber(expected)} forecast
+            </span>
+          </div>
+          <Progress label={`${label} against forecast`} rate={expected ? actual / expected : 0} />
+        </div>
+      ))}
+    </section>
+  );
+};
+
 const FILTER_REASONS: Record<string, string> = {
   BOT_USER_AGENT: 'Bots and crawlers',
   EXCESSIVE_REQUESTS: 'Too many requests from one viewer',
