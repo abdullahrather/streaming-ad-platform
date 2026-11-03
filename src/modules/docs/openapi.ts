@@ -551,7 +551,7 @@ export const openApiDocument = {
         ...dashboard('Audiences'),
         summary: 'Delete an audience segment',
         parameters: [pathId('id', 'Segment ID')],
-        responses: responses('204', 'Deleted', '401', '403', '404'),
+        responses: responses('204', 'Deleted', '401', '403', '404', '409'),
       },
     },
     '/player/profile': {
