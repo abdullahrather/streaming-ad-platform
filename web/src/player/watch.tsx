@@ -35,17 +35,45 @@ const EVENT_NAMES: Record<string, string> = {
   complete: 'Watched to the end',
 };
 
+const VIEWER_KEY = 'northlight-viewer';
+const CONSENT_KEY = 'northlight-consent';
+const MID_ROLL_ADS = 2;
+
+const stored = (key: string): string | null => {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+};
+
+const store = (key: string, value: string): void => {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // The choice then lasts for this visit.
+  }
+};
+
+const viewerId = (): string => {
+  const existing = stored(VIEWER_KEY);
+  if (existing) return existing;
+
+  const id = crypto.randomUUID();
+  store(VIEWER_KEY, id);
+  return id;
+};
+
 /** A real site would get this from its own server, which holds the ad server key. */
-let session: { token: string; expiresAt: number } | null = null;
-
-const playerToken = async (): Promise<string> => {
-  if (session && Date.now() < session.expiresAt) return session.token;
-
-  const response = await fetch('/player/session', { method: 'POST' });
+const playerToken = async (consent: boolean): Promise<string> => {
+  const response = await fetch('/player/session', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ viewerId: viewerId(), consent }),
+  });
   if (!response.ok) throw new Error('Ads are not available on this site.');
 
-  const { data } = (await response.json()) as { data: { token: string; expiresIn: number } };
-  session = { token: data.token, expiresAt: Date.now() + (data.expiresIn - 30) * 1000 };
+  const { data } = (await response.json()) as { data: { token: string } };
   return data.token;
 };
 
@@ -62,6 +90,7 @@ const Watch = ({ show, onBack }: { show: Show; onBack: () => void }) => {
   const [currentAd, setCurrentAd] = useState<VastAd | null>(null);
   const [secondsLeft, setSecondsLeft] = useState(0);
   const [log, setLog] = useState<LogLine[]>([]);
+  const [consent, setConsent] = useState(stored(CONSENT_KEY) === 'yes');
 
   const write = (text: string): void => {
     nextLine.current += 1;
@@ -73,34 +102,57 @@ const Watch = ({ show, onBack }: { show: Show; onBack: () => void }) => {
     setLog((lines) => [line, ...lines].slice(0, 40));
   };
 
+  /** Plays one ad. Returns false when there's nothing to play. */
+  const playOne = async (slot: Slot, breakId: string, token: string): Promise<boolean> => {
+    const ad = await requestAd({
+      serverUrl: '/vast',
+      token,
+      showId: show.id,
+      slot,
+      country,
+      device,
+      breakId,
+    });
+    if (!ad || !adVideo.current) {
+      write('No eligible ad for this position');
+      return false;
+    }
+
+    write(`Serving ${ad.advertiser}: ${ad.title}`);
+    setCurrentAd(ad);
+    await playAd(adVideo.current, ad, {
+      onEvent: (event) => write(EVENT_NAMES[event] ?? event),
+      onProgress: setSecondsLeft,
+    });
+    return true;
+  };
+
   /** Runs one ad break. Any problem falls through to the show. */
-  const runAdBreak = async (slot: Slot): Promise<void> => {
+  const runAdBreak = async (slot: Slot, ads = 1): Promise<void> => {
     write(`${SLOT_NAMES[slot]} break: asking the ad server`);
     try {
-      const ad = await requestAd({
-        serverUrl: '/vast',
-        token: await playerToken(),
-        showId: show.id,
-        slot,
-        country,
-        device,
-      });
-      if (!ad || !adVideo.current) {
-        write('No eligible ad for this break');
-        return;
+      const breakId = crypto.randomUUID();
+      const token = await playerToken(consent);
+      for (let position = 0; position < ads; position += 1) {
+        if (!(await playOne(slot, breakId, token))) break;
       }
-
-      write(`Serving ${ad.advertiser}: ${ad.title}`);
-      setCurrentAd(ad);
-      await playAd(adVideo.current, ad, {
-        onEvent: (event) => write(EVENT_NAMES[event] ?? event),
-        onProgress: setSecondsLeft,
-      });
     } catch (error) {
       write(`Skipped: ${(error as Error).message}`);
     } finally {
       setCurrentAd(null);
     }
+  };
+
+  const changeConsent = (allowed: boolean): void => {
+    setConsent(allowed);
+    store(CONSENT_KEY, allowed ? 'yes' : 'no');
+  };
+
+  const deleteProfile = async (): Promise<void> => {
+    const token = await playerToken(false);
+    await fetch(`/player/profile?token=${encodeURIComponent(token)}`, { method: 'DELETE' });
+    changeConsent(false);
+    write('Viewing profile deleted');
   };
 
   const start = async (): Promise<void> => {
@@ -117,7 +169,7 @@ const Watch = ({ show, onBack }: { show: Show; onBack: () => void }) => {
 
     midRollDone.current = true;
     video.pause();
-    void runAdBreak('MID_ROLL').then(() => {
+    void runAdBreak('MID_ROLL', MID_ROLL_ADS).then(() => {
       write('Show resumed');
       return video.play().catch(() => undefined);
     });
@@ -204,6 +256,18 @@ const Watch = ({ show, onBack }: { show: Show; onBack: () => void }) => {
               ))}
             </select>
           </label>
+
+          <label className="consent">
+            <input
+              type="checkbox"
+              checked={consent}
+              onChange={(event) => changeConsent(event.target.checked)}
+            />
+            Use what I watch to choose ads
+          </label>
+          <button type="button" className="text-button" onClick={() => void deleteProfile()}>
+            Delete my viewing profile
+          </button>
 
           <h2>What the player reports</h2>
           <ol className="log" aria-live="polite">

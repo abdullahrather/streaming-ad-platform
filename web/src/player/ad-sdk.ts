@@ -23,6 +23,8 @@ export interface AdBreakRequest {
   slot: 'PRE_ROLL' | 'MID_ROLL' | 'POST_ROLL';
   country: string;
   device: string;
+  /** Ads sharing a break ID never come from rival brands. */
+  breakId?: string;
 }
 
 export interface AdCallbacks {
@@ -69,7 +71,8 @@ export const parseVast = (xml: string): VastAd | null => {
 
 export const requestAd = async (request: AdBreakRequest): Promise<VastAd | null> => {
   const { serverUrl, ...placement } = request;
-  const response = await fetch(`${serverUrl}?${new URLSearchParams({ ...placement }).toString()}`);
+  const provided = Object.entries(placement).filter(([, value]) => value !== undefined);
+  const response = await fetch(`${serverUrl}?${new URLSearchParams(provided).toString()}`);
   if (!response.ok) throw new Error(`The ad server responded with ${response.status}.`);
   return parseVast(await response.text());
 };

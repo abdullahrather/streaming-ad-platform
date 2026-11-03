@@ -37,6 +37,34 @@ export interface CampaignInput {
   targetGenres: string[];
   targetDevices: string[];
   targetSlots: string[];
+  targetSegmentIds: string[];
+  deliveryType: 'GUARANTEED' | 'AUCTION';
+  pacingMode: 'ASAP' | 'EVEN' | 'CUSTOM';
+  dailyBudgetCents: number | null;
+  dailyImpressionTarget: number | null;
+  frequencyCapPerDay: number | null;
+  activeHours: number[];
+  activeDays: number[];
+  competitiveCategory: string;
+}
+
+export interface Forecast {
+  availableImpressions: number;
+  expectedImpressions: number;
+  lowImpressions: number;
+  highImpressions: number;
+  expectedReach: number;
+  averageFrequency: number;
+  expectedSpendCents: number;
+  goalDeliveryRate: number;
+  warnings: string[];
+}
+
+export interface Segment {
+  id: string;
+  name: string;
+  genres: string[];
+  minViews: number;
 }
 
 export interface Campaign extends Totals, Omit<CampaignInput, 'status'> {
@@ -49,6 +77,8 @@ export interface Campaign extends Totals, Omit<CampaignInput, 'status'> {
   deliveryRate: number;
   budgetUsedRate: number;
   pacing: Pacing;
+  forecastImpressions: number | null;
+  forecastReach: number | null;
 }
 
 export interface Point extends Totals {
@@ -64,6 +94,7 @@ export interface CampaignDetail {
   timeseries: Point[];
   breakdown: { slot: Row[]; country: Row[]; device: Row[]; show: Row[] };
   filtered: Array<{ reason: string; count: number }>;
+  reach: number;
 }
 
 export interface Show {
@@ -175,6 +206,7 @@ export interface Creative {
   campaignId: string;
   name: string;
   clickUrl: string;
+  weight: number;
   status: CreativeStatus;
   durationSeconds: number;
   width: number;
@@ -184,6 +216,13 @@ export interface Creative {
   videoUrl: string;
   posterUrl: string;
   createdAt: string;
+  results?: {
+    impressions: number;
+    clicks: number;
+    ctr: number;
+    completionRate: number;
+  };
+  comparison?: 'LEADING' | 'BEHIND' | 'TOO_CLOSE' | 'NOT_ENOUGH_DATA';
 }
 
 export interface ReviewItem extends Creative {
@@ -342,6 +381,12 @@ export const api = {
     body.append('file', file);
     return request<Creative>('/creatives', { method: 'POST', body });
   },
+  setCreativeWeight: (id: string, weight: number) => patch(`/creatives/${id}`, { weight }),
+  forecast: (input: CampaignInput) => post<Forecast>('/campaigns/forecast', input),
+  segments: () => request<Segment[]>('/segments'),
+  createSegment: (name: string, genres: string[], minViews: number) =>
+    post('/segments', { name, genres, minViews }),
+  deleteSegment: (id: string) => remove(`/segments/${id}`),
   deleteCreative: (id: string) => remove(`/creatives/${id}`),
   reviewQueue: () => request<ReviewItem[]>('/admin/creatives'),
   reviewCreative: (id: string, decision: 'APPROVE' | 'REJECT', reason: string) =>

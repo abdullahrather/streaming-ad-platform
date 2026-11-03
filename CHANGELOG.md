@@ -6,6 +6,23 @@ The main changes in each version. Every release's full notes are on the [Release
 
 ### Added
 
+- Frequency caps, schedules, daily budgets and even, ASAP or custom pacing
+- Consent-based audiences built from viewing interests, which viewers can delete
+- Competitive separation within ad breaks, and multi-ad breaks on the demo site
+- Second-price auctions, with the real cost of each impression recorded
+- Per-ad results and A/B tests with a significance check
+- Delivery and reach forecasts, with a backtest
+- Ad request and audience recording
+
+### Changed
+
+- Spend now comes from recorded costs instead of impressions × CPM
+- Player tokens carry the viewer's consent
+
+## 1.4.0
+
+### Added
+
 - An event queue on Redis, with each event counted exactly once through retries and crashes
 - Hard delivery limits that hold under concurrent traffic
 - Short-lived player tokens

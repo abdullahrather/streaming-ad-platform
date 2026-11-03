@@ -5,6 +5,7 @@ import { CampaignAds } from './creatives';
 import {
   Breakdown,
   FilteredTraffic,
+  ForecastComparison,
   Kpis,
   PacingBadge,
   Progress,
@@ -275,6 +276,7 @@ export const CampaignPage = ({
             <Delivery campaign={campaign} />
             <Facts campaign={campaign} />
           </div>
+          <ForecastComparison campaign={campaign} reach={data.reach} />
           <CampaignAds campaignId={campaign.id} canEdit={canEdit(user)} />
           <Trends points={data.timeseries} />
           <ViewerDropOff totals={campaign} />

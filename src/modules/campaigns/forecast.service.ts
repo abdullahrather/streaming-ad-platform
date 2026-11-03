@@ -140,12 +140,24 @@ const bookedDemand = async (dto: ForecastDto, excludeId?: string): Promise<numbe
   }, 0);
 };
 
-/** The latest audience figures, or nothing before any viewers have been seen. */
-const audienceFigures = (): Promise<{
+/** Averages recent days, so one quiet day can't skew a forecast. */
+const audienceFigures = async (): Promise<{
   viewers: number;
   consented: number;
   allTime: number;
-} | null> => prisma.audienceDay.findFirst({ orderBy: { day: 'desc' } });
+} | null> => {
+  const days = await prisma.audienceDay.findMany({ orderBy: { day: 'desc' }, take: LOOKBACK_DAYS });
+  if (days.length === 0) return null;
+
+  const average = (values: number[]): number =>
+    values.reduce((sum, value) => sum + value, 0) / values.length;
+
+  return {
+    viewers: average(days.map(({ viewers }) => viewers)),
+    consented: average(days.map(({ consented }) => consented)),
+    allTime: Math.max(...days.map(({ allTime }) => allTime)),
+  };
+};
 
 /** Genres targeted through segments narrow the audience to those genres' share. */
 const segmentGenres = async (ids: string[]): Promise<string[]> => {
