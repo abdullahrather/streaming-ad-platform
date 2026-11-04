@@ -57,13 +57,19 @@ const pretty = (column: ReportColumn, value: number | undefined): string =>
     maximumFractionDigits: DECIMALS[column],
   });
 
-const dateOnly = (date: Date): string => date.toISOString().slice(0, 10);
+const moment = new Intl.DateTimeFormat('en-GB', {
+  timeZone: env.PLATFORM_TIMEZONE,
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+  hourCycle: 'h23',
+});
 
-/** The last day a report covers, since "to" is the exclusive end. */
-const lastDay = (to: Date): Date => new Date(to.getTime() - 1);
-
+/** A report covers a rolling window up to the current hour, so the label shows times. */
 export const periodLabel = ({ from, to }: Pick<ReportResult, 'from' | 'to'>): string =>
-  `${dateOnly(from)} to ${dateOnly(lastDay(to))}`;
+  `${moment.format(from)} to ${moment.format(to)}`;
 
 /** Spreadsheets run cells starting with these as formulas, so they're made plain text. */
 const safeCell = (text: string): string => {
@@ -113,7 +119,7 @@ export const toPdf = (report: ReportResult, meta: PdfMeta): Promise<Buffer> =>
       .fillColor('#555555')
       .text(
         `${meta.organisation} · ${periodLabel(report)} · by ${GROUPING_LABELS[report.groupBy].toLowerCase()} · ` +
-          `generated ${meta.generatedAt.toISOString().slice(0, 16).replace('T', ' ')} UTC (${env.PLATFORM_TIMEZONE} days)`,
+          `generated ${moment.format(meta.generatedAt)} · times in ${env.PLATFORM_TIMEZONE}`,
       )
       .fillColor('#000000')
       .moveDown(1);

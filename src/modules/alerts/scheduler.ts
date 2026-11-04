@@ -10,11 +10,13 @@ import { runDueReports } from '@/modules/reports/report-delivery';
 import { alertsService } from './alerts.service';
 
 const REPORT_CHECK_MS = 60_000;
+// The first check runs soon after startup rather than a full interval later.
+const FIRST_CHECK_MS = 15_000;
 
-/** Runs a task on a timer, skipping a tick while the previous run is still going. */
-const every = (task: () => Promise<unknown>, name: string, ms: number): NodeJS.Timeout => {
+/** Runs a task soon after startup and then on a timer, skipping a tick while one is running. */
+const every = (task: () => Promise<unknown>, name: string, ms: number): (() => void) => {
   let running = false;
-  const timer = setInterval(() => {
+  const run = (): void => {
     if (running) return;
     running = true;
     task()
@@ -22,17 +24,23 @@ const every = (task: () => Promise<unknown>, name: string, ms: number): NodeJS.T
       .finally(() => {
         running = false;
       });
-  }, ms);
+  };
+  const first = setTimeout(run, Math.min(FIRST_CHECK_MS, ms));
+  const timer = setInterval(run, ms);
+  first.unref();
   timer.unref();
-  return timer;
+  return () => {
+    clearTimeout(first);
+    clearInterval(timer);
+  };
 };
 
 export const startScheduler = (): (() => void) => {
-  const reports = every(() => runDueReports(), 'Scheduled reports', REPORT_CHECK_MS);
-  const alerts = every(() => alertsService.check(), 'Alert check', env.ALERT_CHECK_MS);
+  const stopReports = every(() => runDueReports(), 'Scheduled reports', REPORT_CHECK_MS);
+  const stopAlerts = every(() => alertsService.check(), 'Alert check', env.ALERT_CHECK_MS);
 
   return () => {
-    clearInterval(reports);
-    clearInterval(alerts);
+    stopReports();
+    stopAlerts();
   };
 };

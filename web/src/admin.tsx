@@ -340,6 +340,20 @@ export const MailboxPage = () => {
           </p>
           <p className="mail-body">{email.body}</p>
           {email.link && <a href={email.link}>Open link</a>}
+          {email.attachments.length > 0 && (
+            <ul className="attachments" aria-label="Attachments">
+              {email.attachments.map((file) => (
+                <li key={file.filename}>
+                  <a
+                    href={`data:${file.contentType};base64,${file.content}`}
+                    download={file.filename}
+                  >
+                    {file.filename}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          )}
         </article>
       ))}
     </main>

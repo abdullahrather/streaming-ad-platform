@@ -4,6 +4,23 @@ The main changes in each version. Every release's full notes are on the [Release
 
 ## Unreleased
 
+### Added
+
+- Reach and average frequency for any period, from daily HyperLogLog sketches
+- The change against the previous period on every headline number
+- A page that compares two to four campaigns side by side
+- Drop-off by ad slot, device and show
+- A report builder with CSV and PDF downloads, and saved reports
+- Saved reports emailed every day or week, with a summary, open alerts and both files attached
+- Alerts for delivery falling behind, budget running out early and sudden drops, emailed once when they open
+- An Account setting to turn alert emails off, and attachments in the local mailbox
+- `RUN_SCHEDULER` and `ALERT_CHECK_MS` settings
+
+### Changed
+
+- The forecast comparison uses lifetime reach, and the campaign page shows reach for the chosen period
+- The breakdowns show each slot, device and show's completion rate
+
 ### Fixed
 
 - A campaign no longer plays twice in the same ad break

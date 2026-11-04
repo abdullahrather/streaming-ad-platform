@@ -346,6 +346,46 @@ const DevicesCard = ({ refreshKey }: { refreshKey: number }) => {
   );
 };
 
+const AlertsCard = ({ user, onChanged }: { user: User; onChanged: () => void }) => {
+  const [error, setError] = useState('');
+  // The box changes at once, and goes back if saving fails.
+  const [enabled, setEnabled] = useState(user.alertEmails);
+  if (!user.organisationId) return null;
+
+  return (
+    <section className="card">
+      <h2>Campaign alerts</h2>
+      <p className="muted small">
+        Emails you when a campaign in{' '}
+        {user.organisations.find(({ id }) => id === user.organisationId)?.name ??
+          'this organisation'}{' '}
+        falls behind, is running out of budget early or drops suddenly. Alerts always show on the
+        Alerts page.
+      </p>
+      <label className="check">
+        <input
+          type="checkbox"
+          checked={enabled}
+          onChange={(event) => {
+            const wanted = event.target.checked;
+            setError('');
+            setEnabled(wanted);
+            api
+              .setAlertEmails(wanted)
+              .then(onChanged)
+              .catch((reason: Error) => {
+                setEnabled(!wanted);
+                setError(reason.message);
+              });
+          }}
+        />
+        Email me campaign alerts
+      </label>
+      <ErrorNote message={error} />
+    </section>
+  );
+};
+
 export const AccountPage = ({ user, onChanged }: { user: User; onChanged: () => void }) => {
   const [refreshKey, setRefreshKey] = useState(0);
 
@@ -361,6 +401,7 @@ export const AccountPage = ({ user, onChanged }: { user: User; onChanged: () => 
         <ProfileCard user={user} onChanged={onChanged} />
         <PasswordCard onChanged={() => setRefreshKey((key) => key + 1)} />
         <TwoFactorCard user={user} onChanged={onChanged} />
+        <AlertsCard user={user} onChanged={onChanged} />
         <DevicesCard refreshKey={refreshKey} />
       </div>
     </>

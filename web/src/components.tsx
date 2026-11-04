@@ -8,7 +8,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import type { Campaign, Pacing, Point, Row, Status, Totals } from './api';
+import type { Campaign, Pacing, PeriodTotals, Point, Row, Status, Totals } from './api';
 import { formatCompact, formatEuros, formatNumber, formatPercent, formatTick } from './format';
 import { RANGES } from './hooks';
 
@@ -61,13 +61,101 @@ export const RangePicker = ({
   </div>
 );
 
-export const Kpis = ({ totals, spendCents }: { totals: Totals; spendCents: number }) => {
-  const items = [
-    { label: 'Impressions', value: formatCompact(totals.impressions) },
-    { label: 'Clicks', value: formatCompact(totals.clicks) },
-    { label: 'Click-through rate', value: formatPercent(totals.ctr, 2) },
-    { label: 'Ads watched to the end', value: formatPercent(totals.completionRate) },
-    { label: 'Spend', value: formatEuros(spendCents) },
+interface Change {
+  text: string;
+  direction: 'up' | 'down' | 'flat';
+  /** Spend going up isn't good or bad in itself, so it isn't coloured. */
+  neutral?: boolean;
+}
+
+/** Percentage change for counts. Nothing to compare against gives null. */
+const countChange = (current: number, previous: number, neutral = false): Change | null => {
+  if (previous <= 0) return null;
+  const change = (current - previous) / previous;
+  if (Math.abs(change) < 0.005) return { text: 'No change', direction: 'flat', neutral };
+  const sign = change > 0 ? '+' : '−';
+  return {
+    text: `${sign}${formatPercent(Math.abs(change), 0)}`,
+    direction: change > 0 ? 'up' : 'down',
+    neutral,
+  };
+};
+
+/** Change in percentage points for rates, so 2% to 2.4% reads as +0.4 points. */
+const rateChange = (current: number, previous: number, hadDelivery: boolean): Change | null => {
+  if (!hadDelivery) return null;
+  const points = (current - previous) * 100;
+  if (Math.abs(points) < 0.05) return { text: 'No change', direction: 'flat' };
+  const sign = points > 0 ? '+' : '−';
+  return {
+    text: `${sign}${Math.abs(points).toFixed(1)} pts`,
+    direction: points > 0 ? 'up' : 'down',
+  };
+};
+
+/** A second description under the value, so the list stays a valid definition list. */
+const ChangeNote = ({ change, period }: { change: Change | null; period: string }) => {
+  if (!change) return <dd className="change muted">No earlier data</dd>;
+  const icon = { up: '▲', down: '▼', flat: '●' }[change.direction];
+  const tone = change.neutral || change.direction === 'flat' ? 'flat' : change.direction;
+  return (
+    <dd className={`change change-${tone}`}>
+      <span aria-hidden="true">{icon}</span> {change.text}{' '}
+      <span className="muted">vs {period}</span>
+    </dd>
+  );
+};
+
+export interface Kpi {
+  label: string;
+  value: string;
+  change?: Change | null;
+}
+
+export const Kpis = ({
+  totals,
+  spendCents,
+  previous,
+  period = 'previous period',
+  extra = [],
+}: {
+  totals: Totals;
+  spendCents: number;
+  /** The period before, for showing change. */
+  previous?: PeriodTotals;
+  period?: string;
+  extra?: Kpi[];
+}) => {
+  const hadDelivery = (previous?.impressions ?? 0) > 0;
+  const items: Kpi[] = [
+    {
+      label: 'Impressions',
+      value: formatCompact(totals.impressions),
+      ...(previous ? { change: countChange(totals.impressions, previous.impressions) } : {}),
+    },
+    {
+      label: 'Clicks',
+      value: formatCompact(totals.clicks),
+      ...(previous ? { change: countChange(totals.clicks, previous.clicks) } : {}),
+    },
+    {
+      label: 'Click-through rate',
+      value: formatPercent(totals.ctr, 2),
+      ...(previous ? { change: rateChange(totals.ctr, previous.ctr, hadDelivery) } : {}),
+    },
+    {
+      label: 'Ads watched to the end',
+      value: formatPercent(totals.completionRate),
+      ...(previous
+        ? { change: rateChange(totals.completionRate, previous.completionRate, hadDelivery) }
+        : {}),
+    },
+    {
+      label: 'Spend',
+      value: formatEuros(spendCents),
+      ...(previous ? { change: countChange(spendCents, previous.spendCents, true) } : {}),
+    },
+    ...extra,
   ];
   return (
     <dl className="kpis">
@@ -75,11 +163,14 @@ export const Kpis = ({ totals, spendCents }: { totals: Totals; spendCents: numbe
         <div key={item.label} className="card kpi">
           <dt>{item.label}</dt>
           <dd>{item.value}</dd>
+          {item.change !== undefined && <ChangeNote change={item.change} period={period} />}
         </div>
       ))}
     </dl>
   );
 };
+
+export { countChange };
 
 const isHourly = (points: Point[]): boolean => {
   if (points.length < 2) return true;
@@ -262,7 +353,8 @@ export const Breakdown = ({
               <div className="bar-label">
                 <span>{labels?.[row.key] ?? row.key}</span>
                 <span className="bar-value">
-                  {formatCompact(row.impressions)} · {formatPercent(row.ctr, 2)} CTR
+                  {formatCompact(row.impressions)} · {formatPercent(row.ctr, 2)} CTR ·{' '}
+                  {formatPercent(row.completionRate, 0)} finished
                 </span>
               </div>
               <div className="bar-track">
@@ -274,6 +366,82 @@ export const Breakdown = ({
             </li>
           ))}
         </ul>
+      )}
+    </section>
+  );
+};
+
+const DROP_OFF_STAGES = [
+  ['firstQuartiles', '25%'],
+  ['midpoints', '50%'],
+  ['thirdQuartiles', '75%'],
+  ['completions', 'End'],
+] as const;
+
+/** Where viewers stop watching, compared across slots, devices or shows. */
+export const DropOffBySegment = ({
+  groups,
+}: {
+  groups: Array<{ id: string; label: string; rows: Row[]; labels?: Record<string, string> }>;
+}) => {
+  const [groupId, setGroupId] = useState(groups[0]?.id ?? '');
+  const group = groups.find((candidate) => candidate.id === groupId) ?? groups[0];
+  if (!group) return null;
+  const rows = group.rows.filter((row) => row.impressions > 0);
+
+  return (
+    <section className="card">
+      <div className="card-header">
+        <h2>Where viewers stop watching</h2>
+        <div className="segmented" role="group" aria-label="Compare drop-off by">
+          {groups.map((candidate) => (
+            <button
+              key={candidate.id}
+              type="button"
+              aria-pressed={candidate.id === group.id}
+              onClick={() => setGroupId(candidate.id)}
+            >
+              {candidate.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      {rows.length === 0 ? (
+        <p className="empty">No delivery in this period.</p>
+      ) : (
+        <div className="table-scroll">
+          <table>
+            <caption className="sr-only">
+              Share of viewers still watching at each point, by {group.label.toLowerCase()}
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">{group.label}</th>
+                <th scope="col" className="num">
+                  Started
+                </th>
+                {DROP_OFF_STAGES.map(([, label]) => (
+                  <th key={label} scope="col" className="num">
+                    {label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr key={row.key}>
+                  <th scope="row">{group.labels?.[row.key] ?? row.key}</th>
+                  <td className="num">{formatCompact(row.impressions)}</td>
+                  {DROP_OFF_STAGES.map(([field, label]) => (
+                    <td key={label} className="num">
+                      {formatPercent(row[field] / row.impressions, 0)}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </section>
   );

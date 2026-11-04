@@ -10,6 +10,7 @@ export interface User {
   twoFactorEnabled: boolean;
   organisationId: string | null;
   organisationRole: OrganisationRole | null;
+  alertEmails: boolean;
   organisations: Array<{ id: string; name: string; role: OrganisationRole }>;
 }
 
@@ -94,7 +95,73 @@ export interface CampaignDetail {
   timeseries: Point[];
   breakdown: { slot: Row[]; country: Row[]; device: Row[]; show: Row[] };
   filtered: Array<{ reason: string; count: number }>;
+  /** Unique viewers in the range. */
   reach: number;
+  averageFrequency: number;
+  lifetimeReach: number;
+  previous: PeriodTotals & { reach: number; averageFrequency: number };
+}
+
+export interface PeriodTotals extends Totals {
+  spendCents: number;
+}
+
+export interface Summary {
+  current: PeriodTotals;
+  previous: PeriodTotals;
+}
+
+export interface Compared {
+  campaign: Campaign;
+  timeseries: Point[];
+  reach: number;
+  averageFrequency: number;
+}
+
+export type ReportGrouping = 'DAY' | 'CAMPAIGN' | 'SLOT' | 'COUNTRY' | 'DEVICE' | 'SHOW';
+export type ReportSchedule = 'NONE' | 'DAILY' | 'WEEKLY';
+
+export interface ReportDefinition {
+  campaignIds: string[];
+  groupBy: ReportGrouping;
+  columns: string[];
+  rangeDays: number;
+}
+
+export interface SavedReportInput extends ReportDefinition {
+  name: string;
+  schedule: ReportSchedule;
+  sendWeekday: number;
+  sendHour: number;
+  recipientIds: string[];
+}
+
+export interface SavedReport extends SavedReportInput {
+  id: string;
+  nextRunAt: string | null;
+  lastSentAt: string | null;
+  createdAt: string;
+}
+
+export interface ReportResult {
+  from: string;
+  to: string;
+  groupBy: ReportGrouping;
+  columns: string[];
+  rows: Array<{ key: string; label: string; values: Record<string, number> }>;
+  totals: Record<string, number>;
+}
+
+export type AlertType = 'UNDER_DELIVERY' | 'BUDGET_BURN' | 'SUDDEN_DROP';
+
+export interface Alert {
+  id: string;
+  campaignId: string;
+  type: AlertType;
+  message: string;
+  openedAt: string;
+  resolvedAt: string | null;
+  campaign: { title: string; advertiser: string };
 }
 
 export interface Show {
@@ -196,6 +263,7 @@ export interface CapturedEmail {
   subject: string;
   body: string;
   link: string;
+  attachments: Array<{ filename: string; contentType: string; content: string }>;
   createdAt: string;
 }
 
@@ -306,6 +374,26 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   return (body.meta ? { data: body.data, meta: body.meta } : body.data) as T;
 }
 
+/** Fetches a file with the sign-in token and saves it under the name the server gives. */
+async function download(path: string, init: RequestInit = {}): Promise<void> {
+  let response = await send(path, init);
+  if (response.status === 401 && token && (await refreshToken())) response = await send(path, init);
+  if (!response.ok) {
+    const body = (await response.json().catch(() => ({}))) as { message?: string };
+    throw new ApiError(response.status, body.message ?? 'Download failed.');
+  }
+  const name =
+    /filename="([^"]+)"/.exec(response.headers.get('content-disposition') ?? '')?.[1] ?? 'report';
+  const url = URL.createObjectURL(await response.blob());
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = name;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
 const post = <T = void>(path: string, body?: unknown): Promise<T> =>
   request<T>(path, {
     method: 'POST',
@@ -366,6 +454,10 @@ export const api = {
     request<Point[]>(withRange('/campaigns/analytics/timeseries', range)),
   campaign: (id: string, range: Range) =>
     request<CampaignDetail>(withRange(`/campaigns/${id}/analytics`, range)),
+  summary: (range: Range) => request<Summary>(withRange('/campaigns/analytics/summary', range)),
+  compare: (ids: string[], range: Range) =>
+    request<Compared[]>(withSearch('/campaigns/compare', { ids: ids.join(','), ...range })),
+  campaigns: () => request<Page<Campaign>>(withSearch('/campaigns', { limit: 100 })),
   shows: () => request<Show[]>('/shows'),
   create: (input: CampaignInput) => post<{ id: string }>('/campaigns', input),
   update: (id: string, input: Partial<CampaignInput>) =>
@@ -436,4 +528,23 @@ export const api = {
   adminAudit: (page: number) => request<Page<AuditEntry>>(withSearch('/admin/audit', { page })),
 
   mailbox: () => request<CapturedEmail[]>('/dev/mailbox'),
+
+  runReport: (definition: ReportDefinition) => post<ReportResult>('/reports/run', definition),
+  exportReport: (definition: ReportDefinition, format: 'csv' | 'pdf') =>
+    download(`/reports/export?format=${format}`, {
+      method: 'POST',
+      body: JSON.stringify(definition),
+    }),
+  reports: () => request<SavedReport[]>('/reports'),
+  saveReport: (input: SavedReportInput) => post<SavedReport>('/reports', input),
+  updateReport: (id: string, input: SavedReportInput) =>
+    request<SavedReport>(`/reports/${id}`, { method: 'PUT', body: JSON.stringify(input) }),
+  deleteReport: (id: string) => remove(`/reports/${id}`),
+  exportSavedReport: (id: string, format: 'csv' | 'pdf') =>
+    download(`/reports/${id}/export?format=${format}`),
+  sendReport: (id: string) => post<{ sentTo: number }>(`/reports/${id}/send`),
+
+  alerts: (status: 'open' | 'all', campaignId?: string) =>
+    request<Alert[]>(withSearch('/alerts', { status, ...(campaignId ? { campaignId } : {}) })),
+  setAlertEmails: (alertEmails: boolean) => patch('/account/alerts', { alertEmails }),
 };

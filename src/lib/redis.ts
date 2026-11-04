@@ -21,10 +21,13 @@ for index = 2, #ARGV, 5 do
     if campaignId ~= '' then
       redis.call('INCR', 'delivered:' .. campaignId)
       if viewerId ~= '' then
-        redis.call('PFADD', 'reach:' .. campaignId, viewerId)
+        -- Hashing first keeps the count accurate whatever shape the IDs have:
+        -- similar IDs such as "viewer-1", "viewer-2" otherwise undercount by a few percent.
+        local viewer = redis.sha1hex(viewerId)
+        redis.call('PFADD', 'reach:' .. campaignId, viewer)
         -- One sketch per day, so reach can be counted for any range of days.
         local daily = 'reach:' .. campaignId .. ':' .. day
-        redis.call('PFADD', daily, viewerId)
+        redis.call('PFADD', daily, viewer)
         redis.call('EXPIRE', daily, ${DAILY_REACH_TTL})
       end
     end
