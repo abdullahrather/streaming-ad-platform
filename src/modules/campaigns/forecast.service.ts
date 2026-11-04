@@ -235,8 +235,9 @@ export const forecastCampaign = async (
 
   const warnings: ForecastWarning[] = [];
   if (profile.size === 0) warnings.push('NO_HISTORY');
-  else if (belowFloor) warnings.push('BID_BELOW_FLOOR');
-  else if (expected < dto.impressionGoal && contested < limit)
+  // A bid under the floor never delivers, so this shows even without history.
+  if (belowFloor) warnings.push('BID_BELOW_FLOOR');
+  else if (profile.size > 0 && expected < dto.impressionGoal && contested < limit)
     warnings.push('NOT_ENOUGH_INVENTORY');
   if (budgetLimit < dto.impressionGoal) warnings.push('BUDGET_BELOW_GOAL');
   if (Math.min(dailyBudgetLimit, dailyTargetLimit, frequencyLimit) < dto.impressionGoal) {

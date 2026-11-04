@@ -176,6 +176,7 @@ export class DeliveryService {
         campaign.dailyImpressionLimit,
         viewerId ? campaign.frequencyCapPerDay : 0,
         breakId ? campaign.competitiveCategory : '',
+        breakId ? campaign.id : '',
       );
       if (!reserved) continue;
 

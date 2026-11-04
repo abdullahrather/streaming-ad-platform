@@ -4,6 +4,13 @@ The main changes in each version. Every release's full notes are on the [Release
 
 ## Unreleased
 
+### Fixed
+
+- A campaign no longer plays twice in the same ad break
+- The forecast warns about an auction bid under the floor even when there's no traffic history
+
+## 1.5.0
+
 ### Added
 
 - Frequency caps, schedules, daily budgets and even, ASAP or custom pacing
