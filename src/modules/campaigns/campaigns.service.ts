@@ -59,6 +59,10 @@ export interface CampaignAnalytics extends Campaign, PerformanceTotals {
   pacing: Pacing;
 }
 
+export interface PeriodTotals extends PerformanceTotals {
+  spendCents: number;
+}
+
 export interface TimeseriesPoint extends PerformanceTotals {
   time: Date;
 }
@@ -95,6 +99,15 @@ interface TotalsRow {
   thirdQuartiles: bigint;
   completions: bigint;
 }
+
+const ZERO_TOTALS: TotalsRow = {
+  impressions: 0n,
+  clicks: 0n,
+  firstQuartiles: 0n,
+  midpoints: 0n,
+  thirdQuartiles: 0n,
+  completions: 0n,
+};
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -358,6 +371,34 @@ export class CampaignsService {
     `);
 
     return rows.map((row) => ({ time: row.time, ...toTotals(row) }));
+  }
+
+  /** Totals and spend across every visible campaign, or one, for a date range. */
+  async getPeriodTotals(
+    actor: Actor,
+    range: DateRange,
+    campaignId?: string,
+  ): Promise<PeriodTotals> {
+    const campaignFilter = campaignId ? Prisma.sql`c.id = ${campaignId}` : Prisma.sql`TRUE`;
+
+    const [row] = await prisma.$queryRaw<Array<TotalsRow & { costMillicents: bigint }>>(Prisma.sql`
+      SELECT
+        COALESCE(SUM(m.impressions), 0) AS impressions,
+        COALESCE(SUM(m.clicks), 0) AS clicks,
+        COALESCE(SUM(m.first_quartiles), 0) AS "firstQuartiles",
+        COALESCE(SUM(m.midpoints), 0) AS midpoints,
+        COALESCE(SUM(m.third_quartiles), 0) AS "thirdQuartiles",
+        COALESCE(SUM(m.completions), 0) AS completions,
+        COALESCE(SUM(m.cost_millicents), 0) AS "costMillicents"
+      FROM metrics m
+      JOIN campaigns c ON c.id = m.campaign_id
+      WHERE m.bucket >= ${range.from} AND m.bucket < ${range.to}
+        AND ${organisationSql(actor)} AND ${campaignFilter}
+    `);
+
+    return row
+      ? { ...toTotals(row), spendCents: toCents(row.costMillicents) }
+      : { ...toTotals(ZERO_TOTALS), spendCents: 0 };
   }
 
   /** Traffic rejected as invalid, by reason. Call after checking the actor can see the campaign. */

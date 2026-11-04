@@ -11,11 +11,13 @@ import { CampaignStatus, Role } from '@prisma/client';
 import { createApp } from '@/app';
 import { accountRouter } from '@/modules/account/account.routes';
 import { adminRouter } from '@/modules/admin/admin.routes';
+import { alertsRouter } from '@/modules/alerts/alerts.routes';
 import { authRouter } from '@/modules/auth/auth.routes';
 import { campaignsRouter } from '@/modules/campaigns/campaigns.routes';
 import { creativesRouter, mediaRouter } from '@/modules/creatives/creatives.routes';
 import { deliveryRouter } from '@/modules/delivery/delivery.routes';
 import { playbackRouter } from '@/modules/playback/playback.routes';
+import { reportsRouter } from '@/modules/reports/reports.routes';
 import { isActive } from '@/modules/demo/activity';
 import { drainEvents } from '@/modules/delivery/event-queue';
 import { runTrafficTick } from '@/modules/demo/traffic';
@@ -609,6 +611,8 @@ describe('API docs', () => {
       ...routesOf(creativesRouter as never, '/creatives'),
       ...routesOf(mediaRouter as never, ''),
       ...routesOf(playbackRouter as never, ''),
+      ...routesOf(reportsRouter as never, '/reports'),
+      ...routesOf(alertsRouter as never, '/alerts'),
     ];
 
     expect(documented).toEqual(expect.arrayContaining(actual));

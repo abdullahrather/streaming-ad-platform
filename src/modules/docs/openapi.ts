@@ -10,7 +10,9 @@ import {
   disableTwoFactorSchema,
   enableTwoFactorSchema,
   updateProfileSchema,
+  alertPreferenceSchema,
 } from '@/modules/account/account.routes';
+import { reportDefinitionSchema, saveReportSchema } from '@/modules/reports/reports.schema';
 import { suspendSchema } from '@/modules/admin/admin.routes';
 import {
   reviewSchema,
@@ -123,6 +125,8 @@ export const openApiDocument = {
     { name: 'Admin', description: 'The platform admin console' },
     { name: 'Campaigns', description: 'Managing campaigns' },
     { name: 'Analytics', description: 'Measuring performance' },
+    { name: 'Reports', description: 'Custom reports, CSV and PDF export, and scheduled emails' },
+    { name: 'Alerts', description: 'Under-delivery, budget burn and sudden drops' },
     { name: 'Catalogue', description: 'Shows that ads can run against' },
     { name: 'Creatives', description: 'Video ads and their review' },
     { name: 'Audiences', description: 'Segments built from viewing interests' },
@@ -257,6 +261,14 @@ export const openApiDocument = {
         summary: 'Change your password and sign out other devices',
         requestBody: jsonBody(changePasswordSchema),
         responses: responses('204', 'Changed', '401', '403', '422'),
+      },
+    },
+    '/account/alerts': {
+      patch: {
+        ...dashboard('Account'),
+        summary: 'Turn campaign alert emails on or off for your active organisation',
+        requestBody: jsonBody(alertPreferenceSchema),
+        responses: responses('204', 'Updated', '401', '403', '409', '422'),
       },
     },
     '/account/sessions': {
@@ -464,6 +476,23 @@ export const openApiDocument = {
         responses: responses('200', 'Points in time order', '401', '422'),
       },
     },
+    '/campaigns/analytics/summary': {
+      get: {
+        ...dashboard('Analytics'),
+        summary: 'Totals and spend for a period and the period before it',
+        description: 'The previous period has the same length and ends where this one starts.',
+        parameters: dateRange,
+        responses: responses('200', 'Current and previous totals', '401', '422'),
+      },
+    },
+    '/campaigns/compare': {
+      get: {
+        ...dashboard('Analytics'),
+        summary: 'Compare two to four campaigns side by side',
+        parameters: [query('ids', 'Comma-separated campaign IDs, two to four', true), ...dateRange],
+        responses: responses('200', 'Totals, reach and trend per campaign', '401', '404', '422'),
+      },
+    },
     '/campaigns/{id}': {
       get: {
         ...dashboard('Campaigns'),
@@ -552,6 +581,85 @@ export const openApiDocument = {
         summary: 'Delete an audience segment',
         parameters: [pathId('id', 'Segment ID')],
         responses: responses('204', 'Deleted', '401', '403', '404', '409'),
+      },
+    },
+    '/reports/run': {
+      post: {
+        ...dashboard('Reports'),
+        summary: 'Run a report without saving it',
+        description:
+          'Covers the last rangeDays up to now. Reach and average frequency need groupBy CAMPAIGN.',
+        requestBody: jsonBody(reportDefinitionSchema),
+        responses: responses('200', 'Rows and totals', '401', '422'),
+      },
+    },
+    '/reports/export': {
+      post: {
+        ...dashboard('Reports'),
+        summary: 'Download a report as CSV or PDF',
+        parameters: [query('format', 'csv or pdf')],
+        requestBody: jsonBody(reportDefinitionSchema),
+        responses: responses('200', 'The file', '401', '422'),
+      },
+    },
+    '/reports': {
+      get: {
+        ...dashboard('Reports'),
+        summary: "Your organisation's saved reports",
+        responses: responses('200', 'Saved reports', '401'),
+      },
+      post: {
+        ...dashboard('Reports'),
+        summary: 'Save a report, optionally emailed daily or weekly',
+        description: 'Owners and managers only. Recipients must be members of the organisation.',
+        requestBody: jsonBody(saveReportSchema),
+        responses: responses('201', 'Saved', '401', '403', '409', '422'),
+      },
+    },
+    '/reports/{id}': {
+      get: {
+        ...dashboard('Reports'),
+        summary: 'Read a saved report',
+        parameters: [pathId('id', 'Report ID')],
+        responses: responses('200', 'The report', '401', '404'),
+      },
+      put: {
+        ...dashboard('Reports'),
+        summary: 'Replace a saved report',
+        parameters: [pathId('id', 'Report ID')],
+        requestBody: jsonBody(saveReportSchema),
+        responses: responses('200', 'Updated', '401', '403', '404', '422'),
+      },
+      delete: {
+        ...dashboard('Reports'),
+        summary: 'Delete a saved report',
+        parameters: [pathId('id', 'Report ID')],
+        responses: responses('204', 'Deleted', '401', '403', '404'),
+      },
+    },
+    '/reports/{id}/export': {
+      get: {
+        ...dashboard('Reports'),
+        summary: 'Run a saved report and download it as CSV or PDF',
+        parameters: [pathId('id', 'Report ID'), query('format', 'csv or pdf')],
+        responses: responses('200', 'The file', '401', '404', '422'),
+      },
+    },
+    '/reports/{id}/send': {
+      post: {
+        ...dashboard('Reports'),
+        summary: 'Email a saved report to its recipients now',
+        parameters: [pathId('id', 'Report ID')],
+        responses: responses('200', 'How many people it was sent to', '401', '403', '404'),
+      },
+    },
+    '/alerts': {
+      get: {
+        ...dashboard('Alerts'),
+        summary: 'Campaign alerts, newest first',
+        description: 'Alerts open and resolve on their own as campaigns are checked.',
+        parameters: [query('status', 'open or all'), query('campaignId', 'Only this campaign')],
+        responses: responses('200', 'Alerts', '401', '422'),
       },
     },
     '/player/profile': {

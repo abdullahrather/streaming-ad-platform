@@ -30,6 +30,8 @@ export const changePasswordSchema = z.object({
 
 export const enableTwoFactorSchema = z.object({ code: z.string().trim().length(6) });
 
+export const alertPreferenceSchema = z.object({ alertEmails: z.boolean() });
+
 export const disableTwoFactorSchema = z.object({
   password: z.string({ error: 'Password is required.' }).min(1),
   code: z.string({ error: 'Code is required.' }).trim().min(6).max(20),
@@ -50,6 +52,22 @@ accountRouter.patch(
   handle(async (req, res) => {
     const { name } = updateProfileSchema.parse(req.body);
     await prisma.user.update({ where: { id: actorOf(req).sub }, data: { name } });
+    res.status(204).end();
+  }),
+);
+
+/** Turns campaign alert emails on or off for the active organisation. */
+accountRouter.patch(
+  '/alerts',
+  handle(async (req, res) => {
+    const actor = actorOf(req);
+    const { alertEmails } = alertPreferenceSchema.parse(req.body);
+    if (!actor.organisationId) throw new AppError(409, 'Choose an organisation first.');
+
+    await prisma.membership.update({
+      where: { userId_organisationId: { userId: actor.sub, organisationId: actor.organisationId } },
+      data: { alertEmails },
+    });
     res.status(204).end();
   }),
 );

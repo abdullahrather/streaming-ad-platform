@@ -7,16 +7,26 @@
 import { Redis } from 'ioredis';
 import { env } from '@/config/env';
 
+const DAILY_TTL = 2 * 86400;
+// Daily reach sketches outlive any report range a person can ask for.
+const DAILY_REACH_TTL = 400 * 86400;
+
 const ENQUEUE_EVENTS = `
 local accepted = {}
-for index = 2, #ARGV, 4 do
-  local eventId, campaignId, viewerId, payload =
-    ARGV[index], ARGV[index + 1], ARGV[index + 2], ARGV[index + 3]
+for index = 2, #ARGV, 5 do
+  local eventId, campaignId, viewerId, day, payload =
+    ARGV[index], ARGV[index + 1], ARGV[index + 2], ARGV[index + 3], ARGV[index + 4]
   if redis.call('SET', 'seen:' .. eventId, '1', 'NX', 'EX', ARGV[1]) then
     accepted[#accepted + 1] = payload
     if campaignId ~= '' then
       redis.call('INCR', 'delivered:' .. campaignId)
-      if viewerId ~= '' then redis.call('PFADD', 'reach:' .. campaignId, viewerId) end
+      if viewerId ~= '' then
+        redis.call('PFADD', 'reach:' .. campaignId, viewerId)
+        -- One sketch per day, so reach can be counted for any range of days.
+        local daily = 'reach:' .. campaignId .. ':' .. day
+        redis.call('PFADD', daily, viewerId)
+        redis.call('EXPIRE', daily, ${DAILY_REACH_TTL})
+      end
     end
   end
 end
@@ -25,8 +35,6 @@ if #accepted > 0 then
 end
 return #accepted
 `;
-
-const DAILY_TTL = 2 * 86400;
 
 // Checks every limit, then claims the ad, in one step. A price is per 1,000 impressions
 // in cents, which is the cost of one impression in millicents.
@@ -135,3 +143,24 @@ export const viewKeys = (
 });
 
 export const reachKey = (campaignId: string): string => `reach:${campaignId}`;
+
+const DAY_MS = 86_400_000;
+
+/** The UTC day an event belongs to, which names its daily reach sketch. */
+export const reachDay = (time: Date): string => time.toISOString().slice(0, 10);
+
+/** Daily reach keys for every UTC day the range touches. */
+export const dailyReachKeys = (campaignId: string, from: Date, to: Date): string[] => {
+  const keys: string[] = [];
+  const last = Math.floor((to.getTime() - 1) / DAY_MS);
+  for (let day = Math.floor(from.getTime() / DAY_MS); day <= last; day += 1) {
+    keys.push(`${reachKey(campaignId)}:${reachDay(new Date(day * DAY_MS))}`);
+  }
+  return keys;
+};
+
+/** Unique viewers across the range, counting every viewer once however many days they watched. */
+export const reachBetween = async (campaignId: string, from: Date, to: Date): Promise<number> => {
+  const keys = dailyReachKeys(campaignId, from, to);
+  return keys.length === 0 ? 0 : redis.pfcount(...(keys as [string, ...string[]]));
+};

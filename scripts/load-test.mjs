@@ -76,6 +76,7 @@ const serverEnv = {
   ...process.env,
   NODE_ENV: 'production',
   RUN_EVENT_WORKER: 'false',
+  RUN_SCHEDULER: 'false',
   SIMULATE_TRAFFIC: 'off',
   DATABASE_URL: process.env.DATABASE_URL,
 };

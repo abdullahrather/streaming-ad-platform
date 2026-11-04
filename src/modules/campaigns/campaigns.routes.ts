@@ -3,7 +3,7 @@
  *
  * All campaign routes are protected by the JWT authenticate middleware.
  *
- * IMPORTANT: /campaigns/analytics MUST be registered BEFORE /campaigns/:id
+ * IMPORTANT: /campaigns/analytics and /campaigns/compare MUST be registered BEFORE /campaigns/:id
  * so Express doesn't interpret "analytics" as an ID parameter.
  */
 import { Router } from 'express';
@@ -21,6 +21,14 @@ campaignsRouter.get('/analytics', (req, res, next) => {
 
 campaignsRouter.get('/analytics/timeseries', (req, res, next) => {
   void campaignsController.timeseries(req, res, next);
+});
+
+campaignsRouter.get('/analytics/summary', (req, res, next) => {
+  void campaignsController.summary(req, res, next);
+});
+
+campaignsRouter.get('/compare', (req, res, next) => {
+  void campaignsController.compare(req, res, next);
 });
 
 campaignsRouter.post('/forecast', (req, res, next) => {

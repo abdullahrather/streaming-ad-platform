@@ -6,20 +6,26 @@
  */
 import { Request, Response, NextFunction } from 'express';
 import { actorOf, contextOf } from '@/lib/http';
-import { reachKey, redis } from '@/lib/redis';
+import { reachBetween, reachKey, redis } from '@/lib/redis';
 import { auditService } from '@/modules/audit/audit.service';
 import { creativesService } from '@/modules/creatives/creatives.service';
 import {
+  compareQuerySchema,
   createCampaignSchema,
   dateRangeSchema,
   forecastSchema,
   listCampaignsQuerySchema,
+  previousRange,
   updateCampaignSchema,
 } from './campaigns.schema';
 import { campaignsService } from './campaigns.service';
 import { forecastCampaign } from './forecast.service';
 
 const idOf = (req: Request): string => req.params['id'] as string;
+
+/** How many times the average viewer saw the ad. Reach is an estimate, so this is too. */
+const averageFrequency = (impressions: number, reach: number): number =>
+  reach > 0 ? Math.max(1, impressions / reach) : 0;
 
 export class CampaignsController {
   /** GET /campaigns */
@@ -150,6 +156,52 @@ export class CampaignsController {
     }
   }
 
+  /** GET /campaigns/analytics/summary */
+  async summary(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const actor = actorOf(req);
+      const range = dateRangeSchema.parse(req.query);
+      const [current, previous] = await Promise.all([
+        campaignsService.getPeriodTotals(actor, range),
+        campaignsService.getPeriodTotals(actor, previousRange(range)),
+      ]);
+
+      res.status(200).json({ status: 'success', data: { current, previous } });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /** GET /campaigns/compare */
+  async compare(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const actor = actorOf(req);
+      const { ids, from, to } = compareQuerySchema.parse(req.query);
+      const range = { from, to };
+
+      const data = await Promise.all(
+        ids.map(async (id) => {
+          await campaignsService.findOneOrFail(id, actor);
+          const [[campaign], timeseries, reach] = await Promise.all([
+            campaignsService.getAnalytics(actor, range, id),
+            campaignsService.getTimeseries(actor, range, id),
+            reachBetween(id, from, to),
+          ]);
+          return {
+            campaign,
+            timeseries,
+            reach,
+            averageFrequency: averageFrequency(campaign?.impressions ?? 0, reach),
+          };
+        }),
+      );
+
+      res.status(200).json({ status: 'success', data });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   /** GET /campaigns/:id/analytics */
   async campaignAnalytics(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
@@ -158,16 +210,35 @@ export class CampaignsController {
       const range = dateRangeSchema.parse(req.query);
 
       const breakdown = await campaignsService.getBreakdown(id, actor, range);
-      const filtered = await campaignsService.getFiltered(id, range);
-      const reach = await redis.pfcount(reachKey(id));
-      const [[campaign], timeseries] = await Promise.all([
-        campaignsService.getAnalytics(actor, range, id),
-        campaignsService.getTimeseries(actor, range, id),
-      ]);
+      const earlier = previousRange(range);
+      const [[campaign], timeseries, filtered, previous, reach, previousReach, lifetimeReach] =
+        await Promise.all([
+          campaignsService.getAnalytics(actor, range, id),
+          campaignsService.getTimeseries(actor, range, id),
+          campaignsService.getFiltered(id, range),
+          campaignsService.getPeriodTotals(actor, earlier, id),
+          reachBetween(id, range.from, range.to),
+          reachBetween(id, earlier.from, earlier.to),
+          redis.pfcount(reachKey(id)),
+        ]);
 
-      res
-        .status(200)
-        .json({ status: 'success', data: { campaign, timeseries, breakdown, filtered, reach } });
+      res.status(200).json({
+        status: 'success',
+        data: {
+          campaign,
+          timeseries,
+          breakdown,
+          filtered,
+          reach,
+          averageFrequency: averageFrequency(campaign?.impressions ?? 0, reach),
+          lifetimeReach,
+          previous: {
+            ...previous,
+            reach: previousReach,
+            averageFrequency: averageFrequency(previous.impressions, previousReach),
+          },
+        },
+      });
     } catch (error) {
       next(error);
     }
