@@ -280,6 +280,18 @@ describe('Competitive separation', () => {
 
     expect(await decide(show.id, { breakId: 'break-2' })).not.toBeNull();
   });
+
+  it('never plays the same campaign twice in one break', async () => {
+    const { show, campaign } = await setup();
+    const breakId = 'break-1';
+
+    const first = await decide(show.id, { breakId });
+    const second = await decide(show.id, { breakId });
+
+    expect(first?.campaignId).toBe(campaign.id);
+    expect(second).toBeNull();
+    expect((await decide(show.id, { breakId: 'break-2' }))?.campaignId).toBe(campaign.id);
+  });
 });
 
 describe('Audiences', () => {
@@ -837,6 +849,15 @@ describe('Forecasts', () => {
 
     expect(forecast.expectedImpressions).toBe(0);
     expect(forecast.warnings).toContain('NO_HISTORY');
+  });
+
+  it('still flags a bid under the floor when there is no history', async () => {
+    const forecast = await forecastCampaign(
+      forecastInput({ deliveryType: 'AUCTION', cpmCents: 50, impressionGoal: 1000 }),
+    );
+
+    expect(forecast.warnings).toContain('NO_HISTORY');
+    expect(forecast.warnings).toContain('BID_BELOW_FLOOR');
   });
 
   it('is available before launch, and saved at launch', async () => {

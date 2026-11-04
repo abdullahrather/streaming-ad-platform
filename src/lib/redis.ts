@@ -32,9 +32,11 @@ const DAILY_TTL = 2 * 86400;
 // in cents, which is the cost of one impression in millicents.
 const RESERVE_AD = `
 local function number(key) return tonumber(redis.call('GET', key) or '0') end
-local goal, budget, price, now, dailyBudget, dailyLimit, frequencyCap, category =
+local goal, budget, price, now, dailyBudget, dailyLimit, frequencyCap, category, campaign =
   tonumber(ARGV[1]), tonumber(ARGV[2]), tonumber(ARGV[3]), ARGV[4],
-  tonumber(ARGV[5]), tonumber(ARGV[6]), tonumber(ARGV[7]), ARGV[8]
+  tonumber(ARGV[5]), tonumber(ARGV[6]), tonumber(ARGV[7]), ARGV[8], ARGV[9]
+-- A break remembers its categories and its campaigns, so neither repeats in it.
+local breakCampaign = campaign ~= '' and ('campaign:' .. campaign) or ''
 
 local current = math.max(number(KEYS[1]), number(KEYS[2]))
 if current >= goal then return 0 end
@@ -50,6 +52,7 @@ if dailyLimit > 0 and dailyServed >= dailyLimit then return 0 end
 
 if frequencyCap > 0 and number(KEYS[7]) >= frequencyCap then return 0 end
 if category ~= '' and redis.call('SISMEMBER', KEYS[8], category) == 1 then return 0 end
+if breakCampaign ~= '' and redis.call('SISMEMBER', KEYS[8], breakCampaign) == 1 then return 0 end
 
 redis.call('SET', KEYS[1], string.format('%.0f', current + 1))
 redis.call('SET', KEYS[3], now, 'EX', 600)
@@ -60,10 +63,9 @@ if frequencyCap > 0 then
   redis.call('INCR', KEYS[7])
   redis.call('EXPIRE', KEYS[7], ${DAILY_TTL})
 end
-if category ~= '' then
-  redis.call('SADD', KEYS[8], category)
-  redis.call('EXPIRE', KEYS[8], 3600)
-end
+if category ~= '' then redis.call('SADD', KEYS[8], category) end
+if breakCampaign ~= '' then redis.call('SADD', KEYS[8], breakCampaign) end
+if category ~= '' or breakCampaign ~= '' then redis.call('EXPIRE', KEYS[8], 3600) end
 return 1
 `;
 
@@ -88,6 +90,8 @@ export interface ScriptedRedis extends Redis {
     dailyImpressionLimit: number,
     frequencyCap: number,
     category: string,
+    /** The campaign ID when the ad fills a break, or '' outside breaks. */
+    breakCampaignId: string,
   ): Promise<number>;
 }
 

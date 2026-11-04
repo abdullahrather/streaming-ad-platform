@@ -113,7 +113,7 @@ Run with `SIMULATE=0` to turn off demo traffic, and the dashboard shows only wha
 | **Pacing** | Spreads delivery evenly, spends as fast as possible, or aims for a daily target |
 | **Daily budget** | Stops spending for the day at a set amount |
 | **Audiences** | Targets people by what they watch, only if they consented |
-| **Competitive separation** | Keeps brands in the same category out of the same ad break |
+| **Competitive separation** | Keeps brands in the same category out of the same ad break, and never plays one campaign twice in a break |
 | **A/B tests** | Splits delivery between ads and only names a winner at 95% confidence |
 | **Auctions** | Bids for traffic guaranteed campaigns don't need, paying just above the next bid. Bids under `AUCTION_FLOOR_CPM_CENTS` don't compete |
 
