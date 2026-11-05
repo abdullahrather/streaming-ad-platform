@@ -12,6 +12,7 @@ import { createApp } from './app';
 import { env } from '@/config/env';
 import { prisma } from '@/lib/prisma';
 import { creativesService } from '@/modules/creatives/creatives.service';
+import { refreshAiSettings } from '@/modules/ai/ai.config';
 import { startScheduler } from '@/modules/alerts/scheduler';
 import { startEventWorker } from '@/modules/delivery/event-queue';
 import { startTraffic } from '@/modules/demo/traffic';
@@ -27,6 +28,9 @@ const server = app.listen({ port: env.PORT, backlog: CONNECTION_BACKLOG }, () =>
   console.info(`🏥  Health check: http://localhost:${env.PORT}/health`);
   if (env.RUN_EVENT_WORKER) startEventWorker();
   if (env.RUN_SCHEDULER) startScheduler();
+  // Settings saved in the dashboard, read again so every API process sees a change.
+  void refreshAiSettings();
+  setInterval(() => void refreshAiSettings(), 30_000).unref();
   startTraffic();
   creativesService
     .resumeProcessing()

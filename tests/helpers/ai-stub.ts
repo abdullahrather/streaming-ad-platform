@@ -99,3 +99,54 @@ export const openAiMessage = (
   object: 'chat.completion',
   choices: [{ index: 0, message: { role: 'assistant', ...message }, finish_reason: finish }],
 });
+
+export interface OllamaStub {
+  url: string;
+  /** Models it reports as installed. A finished download adds to it. */
+  models: string[];
+  chats: number;
+  close: () => Promise<void>;
+}
+
+/** A stand-in for Ollama: its own API (version, models, streamed downloads) and the
+ * OpenAI-compatible chat endpoint the assistant uses. */
+export const startOllamaStub = async (): Promise<OllamaStub> => {
+  const app = express();
+  app.use(express.json());
+  const stub = { models: ['qwen2.5:7b'], chats: 0 };
+
+  app.get('/api/version', (_req, res) => {
+    res.json({ version: '0.40.14' });
+  });
+  app.get('/api/tags', (_req, res) => {
+    res.json({ models: stub.models.map((name) => ({ name, size: 4_700_000_000 })) });
+  });
+  app.post('/api/pull', (req, res) => {
+    const { model } = req.body as { model: string };
+    res.setHeader('content-type', 'application/x-ndjson');
+    if (model === 'missing:1b') {
+      res.end(`${JSON.stringify({ error: 'pull model manifest: file does not exist' })}\n`);
+      return;
+    }
+    const total = 1000;
+    res.write(`${JSON.stringify({ status: 'pulling manifest' })}\n`);
+    for (const completed of [250, 600, 1000]) {
+      res.write(`${JSON.stringify({ status: 'pulling layer', total, completed })}\n`);
+    }
+    stub.models.push(model);
+    res.end(`${JSON.stringify({ status: 'success' })}\n`);
+  });
+  app.post('/v1/chat/completions', (_req, res) => {
+    stub.chats += 1;
+    res.json(openAiMessage({ content: '{"ok": true}' }));
+  });
+
+  const server: Server = await new Promise((resolve) => {
+    const listening = app.listen(0, '127.0.0.1', () => resolve(listening));
+  });
+  const { port } = server.address() as AddressInfo;
+  return Object.assign(stub, {
+    url: `http://127.0.0.1:${port}`,
+    close: () => new Promise<void>((resolve) => server.close(() => resolve())),
+  });
+};

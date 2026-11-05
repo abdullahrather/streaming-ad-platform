@@ -537,3 +537,19 @@ model AiRecommendation {
   @@index([organisationId, createdAt])
   @@map("ai_recommendations")
 }
+
+/// The AI assistant's settings, chosen by a platform admin in the dashboard. One row.
+/// AI_PROVIDER in .env takes priority over this.
+model AiSetting {
+  id          String   @id @default("default")
+  enabled     Boolean  @default(false)
+  provider    String
+  model       String   @default("")
+  baseUrl     String   @default("") @map("base_url")
+  /// Encrypted with ENCRYPTION_KEY. Never sent to the browser.
+  apiKey      String?  @map("api_key")
+  updatedById String?  @map("updated_by_id")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("ai_settings")
+}

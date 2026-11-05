@@ -39,6 +39,7 @@ export async function clearDatabase(): Promise<void> {
   await testPrisma.user.deleteMany();
   await testPrisma.auditLog.deleteMany();
   await testPrisma.capturedEmail.deleteMany();
+  await testPrisma.aiSetting.deleteMany();
 }
 
 /** Creates a test user with a known password and returns the record + plaintext password */
