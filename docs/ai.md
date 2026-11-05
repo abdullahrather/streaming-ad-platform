@@ -4,7 +4,26 @@ The assistant is optional. With it off, the platform works the same, and every c
 
 ## Turning it on
 
-Whoever runs the platform sets these in `.env` and restarts the API:
+### From the dashboard
+
+A platform admin opens **Assistant**, where a **Settings** card appears only for admins:
+
+1. **Choose a provider:** a local model, Claude, or an OpenAI-compatible API.
+2. **Fill in what it needs:**
+   - **Claude or OpenAI:** paste the key. It's stored encrypted with `ENCRYPTION_KEY`, shown afterwards only as its last four characters, and never sent back to the browser.
+   - **Local:** the page checks whether Ollama is running and lists the models it already has. Any model from [Ollama's library](https://ollama.com/library) can be downloaded from the page, with a progress bar.
+3. **Test connection.** This sends one tiny request and shows "Live" with the time it took, or the reason it failed in plain words (key refused, model not found, server not reachable).
+4. **Save and turn on.** It applies straight away, with no restart. Other API processes pick it up within 30 seconds.
+
+**Turn off** keeps the settings, so turning it back on doesn't need the key again. Every change is recorded in the activity log, without the key.
+
+**Installing Ollama itself is a manual step.** A web page that downloads and runs installers on the server would be a serious risk if an admin account were ever misused. When Ollama isn't found, the page links to [ollama.com/download](https://ollama.com/download), gives the one-line `winget` command, and offers **Check again**.
+
+Settings can't be changed in the public demo.
+
+### From `.env`
+
+`AI_PROVIDER` in `.env` takes priority over the dashboard and locks its settings. That suits Docker and servers. Whoever runs the platform sets these and restarts the API:
 
 | Setting | Meaning |
 |---|---|
@@ -15,7 +34,7 @@ Whoever runs the platform sets these in `.env` and restarts the API:
 | `AI_TIMEOUT_MS` | How long to wait for the model. Defaults to 60 seconds, and at least 3 minutes for local models |
 | `AI_RATE_LIMIT` | Model requests per person per 15 minutes. Defaults to 30 |
 
-**A free local model.** Install [Ollama](https://ollama.com), run `ollama pull qwen2.5:7b` (about 5 GB), and set `AI_PROVIDER=local`. Nothing leaves the machine and no key is needed. A 7B model answers in about 45 seconds on a laptop GPU.
+**A free local model.** Install [Ollama](https://ollama.com), run `ollama pull qwen2.5:7b` (about 5 GB), and set `AI_PROVIDER=local`. Nothing leaves the machine and no key is needed. On a laptop GPU, a 7B model answers in a few seconds once it's loaded. The first answer after a quiet spell takes longer while the model loads into memory. Raising Ollama's `OLLAMA_CONTEXT_LENGTH` to 16384 gives the model room for longer campaign data.
 
 **Claude.** Set `AI_PROVIDER=anthropic` and `AI_API_KEY` to your own key from the [Claude Console](https://console.anthropic.com). Usage is billed to that account.
 
@@ -72,6 +91,12 @@ When the assistant is on:
   - "Why is Electric City Car behind?" was answered correctly in 6 of 7 runs, naming the frequency cap and its numbers. The one miss came before the delivery check's conclusion was put first in its output; every run after that change was right. Questions about Family Breakfast (matching traffic) and Spring Teaser (paused) were also right.
   - Its suggested changes were all unhelpful (for example, a lower budget described as a higher one), and the delivery guard dropped every one.
   - Drafts filled the form sensibly after the safeguards above, but dates were sometimes a day off.
+- **Dashboard settings,** walked through in a browser against the real local Ollama:
+  - An admin found Ollama, tested `qwen2.5:7b` ("Live"), turned it on with no restart, and got a correct answer.
+  - Downloading a small model showed progress and finished.
+  - A made-up Claude key was refused by the real API with "The key was refused". That costs nothing.
+  - Owners don't see the settings.
+  - Automated tests cover admin-only access, the encrypted key never being returned, `.env` taking priority, the demo lock, the connection test and the Ollama helpers.
 - **In a browser:** the assistant page, the delivery check, approving a change, drafting from a brief, the disabled state, phone width, and an accessibility check with axe. The suggestion shown in the screenshot was added by hand to show the approval step, since the local model didn't produce a usable one.
 
 ## Limits

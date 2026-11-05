@@ -30,6 +30,10 @@ Built with Node.js, TypeScript, Express, Prisma, PostgreSQL, Redis and FFmpeg, w
 |---|---|
 | ![The assistant answering why a campaign is behind, from the campaign's own data](./docs/images/assistant.png) | ![Why a campaign is behind, worked out with no AI, and a suggested change waiting for approval](./docs/images/delivery-check.png) |
 
+| AI settings for admins |
+|---|
+| ![Turning the assistant on from the dashboard, with the local Ollama found and its model chosen](./docs/images/ai-settings.png) |
+
 | Team management | Admin console |
 |---|---|
 | ![Team members, roles and invitations](./docs/images/team.png) | ![Users, organisations and platform activity](./docs/images/admin.png) |
@@ -145,7 +149,7 @@ The demo opens real alerts on its own data within seconds of starting: two campa
 
 Every campaign page has a **delivery check** that says whether the campaign will reach its goal and what holds it back: being paused, having no approved ad, too little matching traffic, the budget, a daily limit or the frequency cap. It's worked out from the campaign's data and the forecast, with no AI.
 
-The **AI assistant** is optional and off by default. Whoever runs the platform turns it on in `.env`, with Claude (their own API key), any OpenAI-compatible API, or a free local model through [Ollama](https://ollama.com) with no key and no data leaving the machine.
+The **AI assistant** is optional and off by default. A platform admin turns it on from the **Assistant** page with Claude (their own API key), any OpenAI-compatible API, or a free local model through [Ollama](https://ollama.com) with no key and no data leaving the machine. The page tests the connection, finds Ollama and downloads models through it, and applies changes with no restart. Keys are stored encrypted and never sent back to the browser. `AI_PROVIDER` in `.env` also works and takes priority.
 
 | Feature | What it does |
 |---|---|
@@ -286,6 +290,7 @@ Dashboard routes need `Authorization: Bearer <token>` from login. Ad server rout
 | | `/ai/campaigns/:id/recommendations` | List or ask for suggested changes |
 | `POST` | `/ai/recommendations/:id/approve` | Apply a suggested change; also `/reject` |
 | `POST` | `/ai/draft-campaign` | Draft a campaign from a written brief |
+| | `/ai/settings`, `/ai/local/*` | Admin settings: provider, key, connection test, Ollama models and downloads |
 | `GET` | `/shows` | The show catalogue |
 | `GET` | `/ad-decision` | Choose an ad: `showId`, `slot`, `country`, `device` |
 | `POST` | `/events` | Queue a batch of ad events, each with an `eventId` and `occurredAt` |

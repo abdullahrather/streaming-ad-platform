@@ -6,6 +6,18 @@ The main changes in each version. Every release's full notes are on the [Release
 
 ### Added
 
+- AI settings on the Assistant page for platform admins: choose a provider, paste a key (stored encrypted, never shown again), test the connection, and turn the assistant on or off with no restart
+- For local models, the page finds Ollama, lists its models, and downloads new ones with a progress bar
+- Settings changes in the activity log
+
+### Changed
+
+- `AI_PROVIDER` in `.env` still works and now locks the dashboard settings when set
+
+## 1.7.0
+
+### Added
+
 - A delivery check on every campaign page: whether it will reach its goal, and the main reason if not, worked out with no AI
 - An optional AI assistant, off by default, using Claude, any OpenAI-compatible API, or a free local model through Ollama
 - Questions about campaigns in plain language, answered with read-only tools scoped to the person asking

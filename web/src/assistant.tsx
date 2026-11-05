@@ -8,6 +8,7 @@ import {
   type Recommendation,
   type User,
 } from './api';
+import { AiSettingsPanel } from './ai-settings';
 import { formatDateTime, formatNumber } from './format';
 import { ErrorNote, firstError } from './ui';
 
@@ -21,7 +22,7 @@ export const useAiStatus = (): AiStatus | null => {
     api
       .aiStatus()
       .then(setStatus)
-      .catch(() => setStatus({ enabled: false, provider: '', model: '', reason: '' }));
+      .catch(() => setStatus({ enabled: false, provider: '', model: '', reason: '', source: '' }));
   }, []);
   return status;
 };
@@ -39,10 +40,8 @@ const AiOff = ({ status }: { status: AiStatus }) => (
       {status.reason.replace(/^The AI assistant is off\.\s*/, '')}
     </p>
     <p className="muted small">
-      It's optional: everything else works without it. To turn it on, whoever runs the platform sets{' '}
-      <code>AI_PROVIDER</code> in <code>.env</code> to <code>anthropic</code> (with their own{' '}
-      <code>AI_API_KEY</code>), <code>openai</code>, or <code>local</code> for a free model on this
-      machine through Ollama, then restarts the API.
+      It's optional: everything else works without it. A platform admin turns it on from the
+      Assistant page, with Claude, an OpenAI-compatible API, or a free local model through Ollama.
     </p>
   </div>
 );
@@ -158,8 +157,10 @@ const Conversation = ({
   );
 };
 
-export const AssistantPage = () => {
-  const status = useAiStatus();
+export const AssistantPage = ({ user }: { user: User }) => {
+  const loaded = useAiStatus();
+  const [changed, setChanged] = useState<AiStatus | null>(null);
+  const status = changed ?? loaded;
   return (
     <>
       <header className="page-header">
@@ -187,6 +188,19 @@ export const AssistantPage = () => {
           <AiOff status={status} />
         )}
       </section>
+      {user.role === 'ADMIN' && status && (
+        <section className="card">
+          <details open={!loaded?.enabled}>
+            <summary>
+              <h2 className="inline-heading">Settings</h2>
+            </summary>
+            <p className="muted small">
+              Only platform admins see this. Changes apply at once, with no restart.
+            </p>
+            <AiSettingsPanel onChange={setChanged} />
+          </details>
+        </section>
+      )}
     </>
   );
 };
