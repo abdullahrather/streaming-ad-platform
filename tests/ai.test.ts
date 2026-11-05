@@ -11,7 +11,7 @@ import { AdSlot, CreativeStatus, Device, OrganisationRole, ReportSchedule } from
 import { createApp } from '@/app';
 import { env } from '@/config/env';
 import { setAiProvider } from '@/modules/ai/ai.config';
-import { aiService } from '@/modules/ai/ai.service';
+import { aiService, hourRange, slowsDelivery } from '@/modules/ai/ai.service';
 import { AnthropicProvider } from '@/modules/ai/providers/anthropic';
 import { OpenAiCompatibleProvider } from '@/modules/ai/providers/openai-compatible';
 import { alertsService } from '@/modules/alerts/alerts.service';
@@ -397,6 +397,35 @@ describe('AI assistant: recommendations', () => {
     );
   });
 
+  it('drops suggestions that would slow a campaign that is already behind', async () => {
+    const owner = await createTestUser();
+    const campaign = await createTestCampaign(owner.id, { frequencyCapPerDay: 1 });
+    const auth = await login(owner);
+    // What a small local model did in testing: the words say one thing, the fields another.
+    claude.reply(
+      claudeJson({
+        recommendations: [
+          suggestion({ title: 'Raise the frequency cap', daily_impression_target: 4 }),
+          suggestion({ title: 'Increase the budget', budget_eur: 1 }),
+          suggestion({ title: 'Raise the frequency cap', frequency_cap_per_day: 3 }),
+        ],
+      }),
+    );
+
+    const diagnosis = await request(app)
+      .get(`/campaigns/${campaign.id}/diagnosis`)
+      .set('Authorization', auth);
+    const created = await request(app)
+      .post(`/ai/campaigns/${campaign.id}/recommendations`)
+      .set('Authorization', auth);
+
+    expect(diagnosis.body.data.willReachGoal).toBe(false);
+    expect(created.status).toBe(201);
+    expect(created.body.data.map((rec: { change: unknown }) => rec.change)).toEqual([
+      { frequencyCapPerDay: 3 },
+    ]);
+  });
+
   it('refuses to apply a suggestion after the campaign changed', async () => {
     const owner = await createTestUser();
     const campaign = await createTestCampaign(owner.id, { frequencyCapPerDay: 1 });
@@ -466,7 +495,8 @@ describe('AI assistant: campaign drafts', () => {
         pacing_mode: 'EVEN',
         daily_budget_eur: null,
         frequency_cap_per_day: 3,
-        active_hours: [18, 19, 20, 99],
+        active_from_hour: 18,
+        active_until_hour: 21,
         active_days: [],
         audiences: [],
         assumptions: ['A €25 CPM is typical for connected TV.'],
@@ -492,7 +522,65 @@ describe('AI assistant: campaign drafts', () => {
       startsAt: '2030-03-01T00:00:00.000Z',
     });
     expect(res.body.data.assumptions).toEqual(['A €25 CPM is typical for connected TV.']);
+    // Dates come from a calendar in the prompt, not the model's own arithmetic.
+    expect(JSON.stringify(claude.requests[0])).toMatch(/Calendar:.*(tomorrow)/);
     expect(await testPrisma.campaign.count()).toBe(0);
+  });
+});
+
+describe('AI assistant: drafts with unrealistic values', () => {
+  it('leaves out values that cannot be right, with a note, instead of failing', async () => {
+    const owner = await createTestUser();
+    await seedInventory(10);
+    // What a small local model returned in testing.
+    claude.reply(
+      claudeJson({
+        title: 'Morning Oats',
+        advertiser: 'Morning Oats',
+        budget_eur: 40000,
+        cpm_eur: 20,
+        impression_goal: 200000,
+        starts_on: 'next Monday',
+        ends_on: '2020-01-01',
+        countries: ['DE'],
+        genres: [],
+        devices: [],
+        ad_slots: [],
+        delivery_type: 'AUCTION',
+        pacing_mode: 'EVEN',
+        daily_budget_eur: 40000,
+        frequency_cap_per_day: 2000000,
+        active_from_hour: 6,
+        active_until_hour: 12,
+        active_days: [1, 2, 3, 4, 5, 6, 0, 1, 2],
+        audiences: [],
+        assumptions: [],
+      }),
+    );
+
+    const res = await request(app)
+      .post('/ai/draft-campaign')
+      .set('Authorization', await login(owner))
+      .send({
+        brief: 'Morning Oats, 40k euros, 2 million impressions, mornings, from next Monday.',
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.input).toMatchObject({
+      dailyBudgetCents: null,
+      frequencyCapPerDay: null,
+      activeHours: [6, 7, 8, 9, 10, 11],
+      activeDays: [1, 2, 3, 4, 5, 6, 0],
+    });
+    expect(new Date(res.body.data.input.startsAt).getTime()).toBeGreaterThan(Date.now());
+    expect(res.body.data.assumptions).toEqual([
+      "The start date wasn't clear, so it was set to the default. Check it.",
+      "The end date wasn't clear, so it was set to the default. Check it.",
+      'Left out the daily budget: it was not below the total budget.',
+      'Left out the frequency cap: the suggested value was not realistic.',
+      'Set the impression goal to 2,000,000, what the budget buys at this CPM; the suggested 200,000 was far off.',
+    ]);
+    expect(res.body.data.input.impressionGoal).toBe(2_000_000);
   });
 });
 
@@ -672,5 +760,49 @@ describe('OpenAI-compatible and local models', () => {
     expect((openai.requests[1] as Record<string, any>)['response_format']).toEqual({
       type: 'json_object',
     });
+  });
+});
+
+describe('AI assistant: safeguards', () => {
+  it('expands hour ranges, including past midnight', () => {
+    expect(hourRange(6, 12)).toEqual([6, 7, 8, 9, 10, 11]);
+    expect(hourRange(22, 2)).toEqual([22, 23, 0, 1]);
+    expect(hourRange(18, 24)).toEqual([18, 19, 20, 21, 22, 23]);
+    expect(hourRange(null, 12)).toEqual([]);
+    expect(hourRange(5, 5)).toEqual([]);
+  });
+
+  it('spots changes that would slow delivery', () => {
+    const campaign = {
+      budgetCents: 100_000,
+      dailyBudgetCents: null,
+      dailyImpressionTarget: 50_000,
+      frequencyCapPerDay: 3,
+      cpmCents: 2000,
+      deliveryType: 'AUCTION',
+      targetCountries: [],
+      targetDevices: ['CTV', 'MOBILE'],
+      targetSlots: [],
+      targetGenres: [],
+      activeHours: [],
+      activeDays: [],
+    } as unknown as Parameters<typeof slowsDelivery>[1];
+
+    expect(slowsDelivery({ budgetCents: 90_000 }, campaign)).toBe('lowers the budget');
+    expect(slowsDelivery({ dailyBudgetCents: 5000 }, campaign)).toBe('tightens the daily budget');
+    expect(slowsDelivery({ dailyImpressionTarget: 4 }, campaign)).toBe(
+      'tightens the daily impression limit',
+    );
+    expect(slowsDelivery({ frequencyCapPerDay: 2 }, campaign)).toBe('tightens the frequency cap');
+    expect(slowsDelivery({ cpmCents: 1500 }, campaign)).toBe('lowers the auction bid');
+    expect(slowsDelivery({ targetDevices: ['CTV'] }, campaign)).toBe('narrows the targeting');
+    expect(slowsDelivery({ activeHours: [6, 7] }, campaign)).toBe('narrows the targeting');
+
+    expect(slowsDelivery({ budgetCents: 150_000 }, campaign)).toBeNull();
+    expect(
+      slowsDelivery({ dailyImpressionTarget: null, frequencyCapPerDay: 5 }, campaign),
+    ).toBeNull();
+    expect(slowsDelivery({ targetDevices: [] }, campaign)).toBeNull();
+    expect(slowsDelivery({ targetDevices: ['CTV', 'MOBILE', 'WEB'] }, campaign)).toBeNull();
   });
 });

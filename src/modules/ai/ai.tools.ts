@@ -83,7 +83,10 @@ export const buildTools = (actor: Actor, now = new Date()): AiTool[] => {
       inputSchema: object({ campaign_id: { type: 'string' } }),
       run: async (input): Promise<unknown> => {
         const { campaign_id } = campaignIdSchema.parse(input);
-        return diagnosisService.diagnose(campaign_id, actor, now);
+        const { summary, ...diagnosis } = await diagnosisService.diagnose(campaign_id, actor, now);
+        // The conclusion first, so smaller models lead with it instead of a raw number.
+        const main = diagnosis.factors.find(({ severity }) => severity !== 'info');
+        return { summary, main_reason: main ? main.detail : null, ...diagnosis };
       },
     },
     {

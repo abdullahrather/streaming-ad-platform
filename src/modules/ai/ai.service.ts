@@ -34,9 +34,9 @@ const ASK_SYSTEM = `You are the analytics assistant in a streaming ad platform. 
 
 Answer the user's question using only the tools, which read the campaigns this user is allowed to see. Look up the numbers before answering; never guess or invent a figure, campaign or cause. If the tools don't show something, say so plainly.
 
-For why a campaign is behind, or whether it will reach its goal, call diagnose_campaign and explain its findings: lead with the main reason and the numbers behind it, then what would help. Use list_campaigns to find a campaign from its name.
+For why a campaign is behind, or whether it will reach its goal, call diagnose_campaign and explain its findings: lead with its main_reason and the numbers behind it, then what would help. Its summary is already correct; don't replace its cause with one of your own. Write numbers with commas every three digits (1,234,567). Use list_campaigns to find a campaign from its name.
 
-Write in plain language for someone new to advertising, briefly explaining terms like CPM, pacing or frequency cap when you use them. Keep answers short: a few sentences or a short list, with the key numbers. You can't change campaigns; for changes, point to the Recommendations button on the campaign page, which needs a person to approve each change.
+Write in plain language for someone new to advertising, briefly explaining terms like CPM, pacing or frequency cap when you use them. Keep answers short: a few sentences or a short list, with the key numbers. You can't change campaigns; for changes, point to the Suggest changes button on the campaign page, where a person approves each change.
 
 ${DATA_RULE}`;
 
@@ -86,8 +86,12 @@ const systemActor = (organisationId: string): Actor => ({
 
 // ── Recommendations ───────────────────────────────────────────────────────────
 
-const nullable = (schema: Record<string, unknown>): Record<string, unknown> => ({
+const nullable = (
+  schema: Record<string, unknown>,
+  description?: string,
+): Record<string, unknown> => ({
   anyOf: [schema, { type: 'null' }],
+  ...(description ? { description } : {}),
 });
 
 const RECOMMENDATION_SCHEMA = {
@@ -100,12 +104,24 @@ const RECOMMENDATION_SCHEMA = {
         properties: {
           title: { type: 'string' },
           reason: { type: 'string' },
-          budget_eur: nullable({ type: 'number' }),
-          daily_budget_eur: nullable({ type: 'number' }),
-          cpm_eur: nullable({ type: 'number' }),
+          budget_eur: nullable(
+            { type: 'number' },
+            'New total budget for the whole flight, in euros',
+          ),
+          daily_budget_eur: nullable(
+            { type: 'number' },
+            'New most it may spend in one day, in euros. A ceiling: lower slows delivery',
+          ),
+          cpm_eur: nullable({ type: 'number' }, 'New price per 1,000 impressions, in euros'),
           pacing_mode: nullable({ type: 'string', enum: ['ASAP', 'EVEN', 'CUSTOM'] }),
-          daily_impression_target: nullable({ type: 'integer' }),
-          frequency_cap_per_day: nullable({ type: 'integer' }),
+          daily_impression_target: nullable(
+            { type: 'integer' },
+            'New most impressions in one day, for the whole campaign. A ceiling: lower slows delivery',
+          ),
+          frequency_cap_per_day: nullable(
+            { type: 'integer' },
+            'New number of times one viewer may see the ad in a day',
+          ),
           countries: nullable({ type: 'array', items: { type: 'string' } }),
           devices: nullable({
             type: 'array',
@@ -206,6 +222,43 @@ const currentValues = (campaign: Campaign, fields: string[]): Change =>
 
 const same = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b);
 
+/** A lower ceiling, where null means none: setting one, or lowering it, tightens. */
+const tightens = (next: unknown, current: number | null): boolean =>
+  typeof next === 'number' && (current === null || next < current);
+
+/** Fewer options, where an empty list means all. */
+const narrows = (next: unknown, current: unknown[]): boolean =>
+  Array.isArray(next) &&
+  next.length > 0 &&
+  (current.length === 0 || current.some((value) => !next.includes(value)));
+
+/**
+ * Why a change would slow a campaign that is already behind, or null if it wouldn't.
+ * Models sometimes describe one change and fill in another, so this checks the numbers, not the words.
+ */
+export const slowsDelivery = (change: Change, campaign: Campaign): string | null => {
+  if (tightens(change.budgetCents, campaign.budgetCents)) return 'lowers the budget';
+  if (tightens(change.dailyBudgetCents, campaign.dailyBudgetCents))
+    return 'tightens the daily budget';
+  if (tightens(change.dailyImpressionTarget, campaign.dailyImpressionTarget))
+    return 'tightens the daily impression limit';
+  if (tightens(change.frequencyCapPerDay, campaign.frequencyCapPerDay))
+    return 'tightens the frequency cap';
+  if (campaign.deliveryType === 'AUCTION' && tightens(change.cpmCents, campaign.cpmCents))
+    return 'lowers the auction bid';
+  const lists: Array<[ChangeField, unknown[]]> = [
+    ['targetCountries', campaign.targetCountries],
+    ['targetDevices', campaign.targetDevices],
+    ['targetSlots', campaign.targetSlots],
+    ['targetGenres', campaign.targetGenres],
+    ['activeHours', campaign.activeHours],
+    ['activeDays', campaign.activeDays],
+  ];
+  return lists.some(([field, current]) => narrows(change[field], current))
+    ? 'narrows the targeting'
+    : null;
+};
+
 // ── Campaign drafts ───────────────────────────────────────────────────────────
 
 const DRAFT_SCHEMA = {
@@ -229,7 +282,14 @@ const DRAFT_SCHEMA = {
     pacing_mode: { type: 'string', enum: ['ASAP', 'EVEN'] },
     daily_budget_eur: nullable({ type: 'number' }),
     frequency_cap_per_day: nullable({ type: 'integer' }),
-    active_hours: { type: 'array', items: { type: 'integer' } },
+    active_from_hour: nullable(
+      { type: 'integer' },
+      'First hour ads may run, 0-23. Null with active_until_hour null for all day',
+    ),
+    active_until_hour: nullable(
+      { type: 'integer' },
+      'Hour ads stop, 1-24, not included. Mornings are 6 until 12',
+    ),
     active_days: { type: 'array', items: { type: 'integer' } },
     audiences: { type: 'array', items: { type: 'string' } },
     assumptions: { type: 'array', items: { type: 'string' } },
@@ -250,7 +310,8 @@ const DRAFT_SCHEMA = {
     'pacing_mode',
     'daily_budget_eur',
     'frequency_cap_per_day',
-    'active_hours',
+    'active_from_hour',
+    'active_until_hour',
     'active_days',
     'audiences',
     'assumptions',
@@ -274,11 +335,41 @@ const draftSchema = z.object({
   pacing_mode: z.enum(['ASAP', 'EVEN']),
   daily_budget_eur: z.number().nullable(),
   frequency_cap_per_day: z.number().nullable(),
-  active_hours: z.array(z.number()),
+  active_from_hour: z.number().int().nullable(),
+  active_until_hour: z.number().int().nullable(),
   active_days: z.array(z.number()),
   audiences: z.array(z.string()),
   assumptions: z.array(z.string()),
 });
+
+const unique = <T>(values: T[]): T[] => [...new Set(values)];
+
+/** Every hour from one up to another, wrapping past midnight. Null for either means all day. */
+export const hourRange = (from: number | null, until: number | null): number[] => {
+  if (from === null || until === null) return [];
+  const start = ((from % 24) + 24) % 24;
+  const end = ((until % 24) + 24) % 24;
+  if (start === end) return [];
+  const hours: number[] = [];
+  for (let hour = start; hour !== end; hour = (hour + 1) % 24) hours.push(hour);
+  return hours;
+};
+
+/** The next two weeks as dates and weekdays, so "next Monday" is a lookup, not arithmetic. */
+const calendar = (now: Date): string =>
+  Array.from({ length: 15 }, (_, offset) => {
+    const date = new Date(now.getTime() + offset * 86_400_000);
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: env.PLATFORM_TIMEZONE,
+      weekday: 'long',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(date);
+    const part = (type: string): string => parts.find((p) => p.type === type)?.value ?? '';
+    const label = offset === 0 ? ' (today)' : offset === 1 ? ' (tomorrow)' : '';
+    return `${part('weekday')} ${part('year')}-${part('month')}-${part('day')}${label}`;
+  }).join('\n');
 
 export interface CampaignDraft {
   input: Record<string, unknown>;
@@ -389,7 +480,7 @@ export class AiService {
       const raw = await provider.json({
         system: `You suggest changes to a streaming ad campaign so it reaches its goal or performs better. A person reviews every suggestion before anything changes.
 
-Suggest at most ${MAX_RECOMMENDATIONS} changes, each fixing a problem the data shows; suggest none if the campaign is on track and nothing needs fixing. Each suggestion sets only the fields it changes and leaves the rest null. Zero removes a daily budget, daily target or frequency cap; an empty list means "all" for targeting, hours and days. Hours are 0-23 and days 0-6 (0 is Sunday) in ${env.PLATFORM_TIMEZONE}. Never lower the budget below what is already spent. Explain each reason with the numbers behind it, in plain language.
+Suggest at most ${MAX_RECOMMENDATIONS} changes, each fixing a problem the data shows; suggest none if the campaign is on track and nothing needs fixing. Each suggestion sets only the fields it changes and leaves the rest null. Zero removes a daily budget, daily target or frequency cap; an empty list means "all" for targeting, hours and days. Hours are 0-23 and days 0-6 (0 is Sunday) in ${env.PLATFORM_TIMEZONE}. When the campaign is behind, only loosen limits: a lower budget, daily budget, daily impression limit or frequency cap, or narrower targeting, slows it further and will be discarded. Never lower the budget below what is already spent. Explain each reason with the numbers behind it, in plain language.
 
 ${DATA_RULE}`,
         prompt: `Now: ${today(now)}.\n\nDiagnosis:\n${JSON.stringify(diagnosis)}\n\nCampaign details:\n${JSON.stringify(details)}`,
@@ -416,6 +507,13 @@ ${DATA_RULE}`,
       // The same rules as a manual edit, so an approval can't store anything invalid.
       if (!updateCampaignSchema.safeParse(effective).success) continue;
       if (typeof effective['budgetCents'] === 'number' && effective['budgetCents'] < 1) continue;
+      if (!diagnosis.willReachGoal) {
+        const reason = slowsDelivery(effective, campaign);
+        if (reason) {
+          console.info(`Dropped an AI suggestion for ${campaignId} that ${reason}.`);
+          continue;
+        }
+      }
 
       created.push(
         await prisma.aiRecommendation.create({
@@ -521,10 +619,10 @@ ${DATA_RULE}`,
 
 Use only these options: genres ${JSON.stringify(shows.map(({ genre }) => genre))}; countries (ISO codes) ${JSON.stringify(countries.map(({ country }) => country))}; devices CTV, MOBILE, WEB, TABLET; ad slots PRE_ROLL, MID_ROLL, POST_ROLL; audiences by name ${JSON.stringify(segments.map(({ name, genres }) => ({ name, genres })))}. An empty list means all. Hours are 0-23 and days 0-6 (0 is Sunday) in ${env.PLATFORM_TIMEZONE}.
 
-Take numbers from the brief. Where the brief doesn't say, choose a sensible value and list it under assumptions: a typical CPM is €15-35; the impression goal should be what the budget buys at that CPM (budget / CPM × 1000); dates default to starting tomorrow and running four weeks. Auctions need a CPM of at least €${(env.AUCTION_FLOOR_CPM_CENTS / 100).toFixed(2)}.
+Take numbers from the brief. Where the brief doesn't say, choose a sensible value and list it under assumptions: a typical CPM is €15-35; the impression goal should be what the budget buys at that CPM (budget / CPM × 1000); dates default to starting tomorrow and running four weeks; take dates from the calendar below. List every value you chose yourself under assumptions, including the advertiser's name if the brief doesn't give it. Auctions need a CPM of at least €${(env.AUCTION_FLOOR_CPM_CENTS / 100).toFixed(2)}.
 
 ${DATA_RULE}`,
-        prompt: `Today is ${today(now)}.\n\nBrief:\n"""\n${brief}\n"""`,
+        prompt: `Today is ${today(now)}.\n\nCalendar:\n${calendar(now)}\n\nBrief:\n"""\n${brief}\n"""`,
         schema: DRAFT_SCHEMA,
       });
       draft = draftSchema.parse(raw);
@@ -535,38 +633,85 @@ ${DATA_RULE}`,
       throw new AppError(502, 'The AI model could not draft a campaign. Try again in a moment.');
     }
 
-    const day = (value: string, fallback: Date): Date => {
+    // Smaller models sometimes fill in values that can't be right. A draft only fills the form,
+    // so those are left out with a note rather than failing the whole draft.
+    const notes: string[] = [];
+    const day = (value: string, after: Date, fallback: Date, label: string): Date => {
       const parsed = new Date(`${value}T00:00:00Z`);
-      return Number.isNaN(parsed.getTime()) ? fallback : parsed;
+      if (!Number.isNaN(parsed.getTime()) && parsed > after) return parsed;
+      notes.push(`The ${label} date wasn't clear, so it was set to the default. Check it.`);
+      return fallback;
     };
-    const startsAt = day(draft.starts_on, new Date(now.getTime() + 86_400_000));
+    const startsAt = day(
+      draft.starts_on,
+      new Date(now.getTime() - 86_400_000),
+      new Date(now.getTime() + 86_400_000),
+      'start',
+    );
+    const endsAt = day(
+      draft.ends_on,
+      startsAt,
+      new Date(startsAt.getTime() + 28 * 86_400_000),
+      'end',
+    );
+    const budgetCents = Math.max(100, Math.round(draft.budget_eur * 100));
+    let dailyBudgetCents = draft.daily_budget_eur ? Math.round(draft.daily_budget_eur * 100) : null;
+    if (dailyBudgetCents !== null && dailyBudgetCents >= budgetCents) {
+      notes.push('Left out the daily budget: it was not below the total budget.');
+      dailyBudgetCents = null;
+    }
+    let frequencyCapPerDay = draft.frequency_cap_per_day
+      ? Math.round(draft.frequency_cap_per_day)
+      : null;
+    if (frequencyCapPerDay !== null && (frequencyCapPerDay < 1 || frequencyCapPerDay > 24)) {
+      notes.push('Left out the frequency cap: the suggested value was not realistic.');
+      frequencyCapPerDay = null;
+    }
+    const cpmCents = Math.max(1, Math.round(draft.cpm_eur * 100));
+    // What the budget buys at that price. A goal far from it is usually a slip in the arithmetic.
+    const affordable = Math.max(1, Math.round((budgetCents / cpmCents) * 1000));
+    let impressionGoal = Math.max(1, Math.round(draft.impression_goal));
+    if (impressionGoal > affordable * 5 || impressionGoal * 5 < affordable) {
+      notes.push(
+        `Set the impression goal to ${affordable.toLocaleString('en-GB')}, what the budget buys at this CPM; the suggested ${impressionGoal.toLocaleString('en-GB')} was far off.`,
+      );
+      impressionGoal = affordable;
+    }
     const input = {
       title: draft.title.slice(0, 120) || 'New campaign',
       advertiser: draft.advertiser.slice(0, 120) || 'Advertiser',
-      budgetCents: Math.max(100, Math.round(draft.budget_eur * 100)),
-      cpmCents: Math.max(1, Math.round(draft.cpm_eur * 100)),
-      impressionGoal: Math.max(1, Math.round(draft.impression_goal)),
+      budgetCents,
+      cpmCents,
+      impressionGoal,
       startsAt,
-      endsAt: day(draft.ends_on, new Date(startsAt.getTime() + 28 * 86_400_000)),
-      targetCountries: draft.countries.filter((code) =>
-        countries.some(({ country }) => country === code.toUpperCase()),
+      endsAt,
+      targetCountries: unique(
+        draft.countries
+          .map((code) => code.toUpperCase())
+          .filter((code) => countries.some(({ country }) => country === code)),
       ),
-      targetGenres: draft.genres.filter((genre) => shows.some((show) => show.genre === genre)),
-      targetDevices: draft.devices,
-      targetSlots: draft.ad_slots,
+      targetGenres: unique(
+        draft.genres.filter((genre) => shows.some((show) => show.genre === genre)),
+      ),
+      targetDevices: unique(draft.devices),
+      targetSlots: unique(draft.ad_slots),
       targetSegmentIds: segments
         .filter(({ name }) => draft.audiences.includes(name))
         .map(({ id }) => id),
       deliveryType: draft.delivery_type,
       pacingMode: draft.pacing_mode,
-      dailyBudgetCents: draft.daily_budget_eur ? Math.round(draft.daily_budget_eur * 100) : null,
-      frequencyCapPerDay: draft.frequency_cap_per_day || null,
-      activeHours: draft.active_hours.filter((hour) => hour >= 0 && hour <= 23),
-      activeDays: draft.active_days.filter((weekday) => weekday >= 0 && weekday <= 6),
+      dailyBudgetCents,
+      frequencyCapPerDay,
+      activeHours: hourRange(draft.active_from_hour, draft.active_until_hour),
+      activeDays: unique(draft.active_days.filter((weekday) => weekday >= 0 && weekday <= 6)),
     };
 
     const checked = createCampaignSchema.safeParse(input);
     if (!checked.success) {
+      console.info(
+        'AI draft broke the campaign rules:',
+        checked.error.issues.map(({ path, message }) => `${path.join('.')}: ${message}`).join('; '),
+      );
       throw new AppError(
         422,
         'The draft did not pass the campaign rules. Try adding more detail to the brief.',
@@ -578,7 +723,7 @@ ${DATA_RULE}`,
         startsAt: input.startsAt.toISOString(),
         endsAt: input.endsAt.toISOString(),
       },
-      assumptions: draft.assumptions.slice(0, 10),
+      assumptions: [...notes, ...draft.assumptions.slice(0, 10)],
     };
   }
 
