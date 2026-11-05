@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { OpenAlerts } from './alerts';
-import { api, type Campaign, type User } from './api';
+import { CampaignAssistant, DeliveryCheck, DraftFromBrief, useAiStatus } from './assistant';
+import { api, type Campaign, type CampaignDraft, type User } from './api';
 import CampaignForm from './CampaignForm';
 import { CampaignAds } from './creatives';
 import {
@@ -92,6 +93,9 @@ const canEdit = (user: User): boolean =>
 export const Overview = ({ user, onOpen }: { user: User; onOpen: (id: string) => void }) => {
   const [rangeId, setRangeId] = useState('7d');
   const [creating, setCreating] = useState(false);
+  const [briefing, setBriefing] = useState(false);
+  const [draft, setDraft] = useState<CampaignDraft | undefined>(undefined);
+  const ai = useAiStatus();
 
   const { data, error, refresh } = useLiveData(async () => {
     const range = rangeFor(rangeId);
@@ -114,8 +118,20 @@ export const Overview = ({ user, onOpen }: { user: User; onOpen: (id: string) =>
         </div>
         <div className="toolbar">
           <RangePicker value={rangeId} onChange={setRangeId} />
+          {canEdit(user) && ai?.enabled && (
+            <button type="button" className="button" onClick={() => setBriefing(true)}>
+              Draft from a brief
+            </button>
+          )}
           {canEdit(user) && (
-            <button type="button" className="button primary" onClick={() => setCreating(true)}>
+            <button
+              type="button"
+              className="button primary"
+              onClick={() => {
+                setDraft(undefined);
+                setCreating(true);
+              }}
+            >
               New campaign
             </button>
           )}
@@ -148,8 +164,20 @@ export const Overview = ({ user, onOpen }: { user: User; onOpen: (id: string) =>
         !error && <p className="empty">Loading…</p>
       )}
 
+      {briefing && (
+        <DraftFromBrief
+          onClose={() => setBriefing(false)}
+          onDraft={(drafted) => {
+            setBriefing(false);
+            setDraft(drafted);
+            setCreating(true);
+          }}
+        />
+      )}
+
       {creating && (
         <CampaignForm
+          {...(draft ? { draft } : {})}
           onClose={() => setCreating(false)}
           onSaved={(id) => {
             setCreating(false);
@@ -309,6 +337,26 @@ export const CampaignPage = ({
             <Delivery campaign={campaign} />
             <Facts campaign={campaign} />
           </div>
+          {/* Settings it depends on, so an approved change re-runs it. */}
+          <DeliveryCheck
+            key={JSON.stringify([
+              campaign.status,
+              campaign.budgetCents,
+              campaign.cpmCents,
+              campaign.pacingMode,
+              campaign.dailyBudgetCents,
+              campaign.dailyImpressionTarget,
+              campaign.frequencyCapPerDay,
+              campaign.activeHours,
+              campaign.activeDays,
+              campaign.targetCountries,
+              campaign.targetDevices,
+              campaign.targetSlots,
+              campaign.targetGenres,
+            ])}
+            campaignId={campaign.id}
+          />
+          <CampaignAssistant campaignId={campaign.id} user={user} onApplied={refresh} />
           <ForecastComparison campaign={campaign} reach={data.lifetimeReach} />
           <CampaignAds campaignId={campaign.id} canEdit={canEdit(user)} />
           <Trends points={data.timeseries} />

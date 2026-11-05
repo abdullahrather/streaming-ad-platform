@@ -1,5 +1,12 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
-import { api, ApiError, type Creative, type CreativeStatus, type ReviewItem } from './api';
+import {
+  api,
+  ApiError,
+  type AiReview,
+  type Creative,
+  type CreativeStatus,
+  type ReviewItem,
+} from './api';
 import { formatDateTime } from './format';
 import { ErrorNote, firstError } from './ui';
 
@@ -215,6 +222,36 @@ export const CampaignAds = ({ campaignId, canEdit }: { campaignId: string; canEd
   );
 };
 
+/** The AI assistant's first look at the poster frame. Advice only: the reviewer decides. */
+const AiAdvice = ({ review }: { review: AiReview }) => (
+  <aside className="ai-advice" aria-label="AI assistant's first look">
+    <p className="small">
+      <span
+        className={`badge ${review.verdict === 'needs_attention' ? 'badge-serious' : 'badge-neutral'}`}
+      >
+        {review.status === 'unavailable'
+          ? 'AI check unavailable'
+          : review.verdict === 'needs_attention'
+            ? 'AI: worth a closer look'
+            : 'AI: nothing flagged'}
+      </span>{' '}
+      {review.summary}
+    </p>
+    {review.issues && review.issues.length > 0 && (
+      <ul className="small">
+        {review.issues.map((issue, index) => (
+          <li key={index}>
+            <strong>{issue.kind}:</strong> {issue.detail}
+          </li>
+        ))}
+      </ul>
+    )}
+    <p className="muted small">
+      From the poster frame only, by {review.model}. It can miss things, so watch the video.
+    </p>
+  </aside>
+);
+
 const ReviewCard = ({ item, onDone }: { item: ReviewItem; onDone: () => void }) => {
   const [rejecting, setRejecting] = useState(false);
   const [reason, setReason] = useState('');
@@ -249,6 +286,8 @@ const ReviewCard = ({ item, onDone }: { item: ReviewItem; onDone: () => void }) 
             Clicks go to <a href={item.clickUrl}>{item.clickUrl}</a>
           </p>
         </div>
+
+        {item.aiReview && <AiAdvice review={item.aiReview} />}
 
         {rejecting && (
           <label>

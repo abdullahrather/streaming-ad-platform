@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { AccountPage } from './account';
 import { AdminPage, MailboxPage } from './admin';
 import { AlertsPage } from './alerts';
+import { AssistantPage } from './assistant';
 import { AudiencesPage } from './audiences';
 import { api, setExpiredHandler, type User } from './api';
 import { ComparePage } from './compare';
@@ -132,6 +133,7 @@ const App = () => {
     }
     if (route.path === '/compare') return <ComparePage key={user.organisationId} />;
     if (route.path === '/alerts') return <AlertsPage key={user.organisationId} />;
+    if (route.path === '/assistant') return <AssistantPage key={user.organisationId} />;
     if (route.path === '/team' && hasOrganisation && !isGuest) {
       return <TeamPage key={user.organisationId} user={user} onChanged={reloadUser} />;
     }
@@ -156,6 +158,7 @@ const App = () => {
     { path: '/compare', label: 'Compare', show: true },
     { path: '/reports', label: 'Reports', show: true },
     { path: '/alerts', label: 'Alerts', show: true },
+    { path: '/assistant', label: 'Assistant', show: true },
     { path: '/audiences', label: 'Audiences', show: hasOrganisation && !isGuest },
     { path: '/team', label: 'Team', show: hasOrganisation && !isGuest },
     { path: '/activity', label: 'Activity', show: seesActivity },

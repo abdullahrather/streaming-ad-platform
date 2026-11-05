@@ -1,0 +1,480 @@
+import { useEffect, useRef, useState, type FormEvent } from 'react';
+import {
+  ApiError,
+  api,
+  type AiStatus,
+  type CampaignDraft,
+  type Diagnosis,
+  type Recommendation,
+  type User,
+} from './api';
+import { formatDateTime, formatNumber } from './format';
+import { ErrorNote, firstError } from './ui';
+
+const errorText = (reason: unknown): string =>
+  reason instanceof ApiError ? firstError(reason) : String(reason);
+
+/** Loads whether the assistant is on, once per page. */
+export const useAiStatus = (): AiStatus | null => {
+  const [status, setStatus] = useState<AiStatus | null>(null);
+  useEffect(() => {
+    api
+      .aiStatus()
+      .then(setStatus)
+      .catch(() => setStatus({ enabled: false, provider: '', model: '', reason: '' }));
+  }, []);
+  return status;
+};
+
+export const canManage = (user: User): boolean =>
+  user.role === 'ADMIN' ||
+  (user.role !== 'GUEST' &&
+    (user.organisationRole === 'OWNER' || user.organisationRole === 'MANAGER'));
+
+/** Shown wherever an AI feature would be, when the assistant is off. */
+const AiOff = ({ status }: { status: AiStatus }) => (
+  <div className="ai-off">
+    <p>
+      <strong>The AI assistant is off.</strong>{' '}
+      {status.reason.replace(/^The AI assistant is off\.\s*/, '')}
+    </p>
+    <p className="muted small">
+      It's optional: everything else works without it. To turn it on, whoever runs the platform sets{' '}
+      <code>AI_PROVIDER</code> in <code>.env</code> to <code>anthropic</code> (with their own{' '}
+      <code>AI_API_KEY</code>), <code>openai</code>, or <code>local</code> for a free model on this
+      machine through Ollama, then restarts the API.
+    </p>
+  </div>
+);
+
+const TOOL_NAMES: Record<string, string> = {
+  list_campaigns: 'campaign list',
+  diagnose_campaign: 'delivery check',
+  campaign_details: 'campaign details',
+  run_report: 'a report',
+  list_alerts: 'alerts',
+};
+
+interface Turn {
+  role: 'user' | 'assistant';
+  content: string;
+  toolsUsed?: string[];
+}
+
+const Conversation = ({
+  campaignId,
+  examples,
+}: {
+  campaignId: string | null;
+  examples: string[];
+}) => {
+  const [turns, setTurns] = useState<Turn[]>([]);
+  const [question, setQuestion] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const end = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    end.current?.scrollIntoView({ block: 'nearest' });
+  }, [turns]);
+
+  const ask = (text: string): void => {
+    const trimmed = text.trim();
+    if (!trimmed || busy) return;
+    const history = turns.slice(-6).map(({ role, content }) => ({ role, content }));
+    setTurns((current) => [...current, { role: 'user', content: trimmed }]);
+    setQuestion('');
+    setBusy(true);
+    setError('');
+    api
+      .ask(trimmed, campaignId, history)
+      .then((answer) =>
+        setTurns((current) => [
+          ...current,
+          { role: 'assistant', content: answer.answer, toolsUsed: answer.toolsUsed },
+        ]),
+      )
+      .catch((reason: unknown) => setError(errorText(reason)))
+      .finally(() => setBusy(false));
+  };
+
+  const submit = (event: FormEvent): void => {
+    event.preventDefault();
+    ask(question);
+  };
+
+  return (
+    <div className="conversation">
+      {turns.length === 0 && (
+        <div className="examples">
+          <p className="muted small">Try asking:</p>
+          {examples.map((example) => (
+            <button key={example} type="button" className="button" onClick={() => ask(example)}>
+              {example}
+            </button>
+          ))}
+        </div>
+      )}
+      <ol className="turns" aria-live="polite">
+        {turns.map((turn, index) => (
+          <li key={index} className={`turn turn-${turn.role}`}>
+            <span className="sr-only">{turn.role === 'user' ? 'You asked:' : 'Assistant:'}</span>
+            <p className="turn-text">{turn.content}</p>
+            {turn.toolsUsed && turn.toolsUsed.length > 0 && (
+              <p className="muted small">
+                Looked at: {turn.toolsUsed.map((tool) => TOOL_NAMES[tool] ?? tool).join(', ')}
+              </p>
+            )}
+          </li>
+        ))}
+        {busy && (
+          <li className="turn turn-assistant muted" aria-label="The assistant is working">
+            Looking at your data…
+          </li>
+        )}
+      </ol>
+      <div ref={end} />
+      <ErrorNote message={error} />
+      <form className="ask" onSubmit={submit}>
+        <label className="wide">
+          <span className="sr-only">Your question</span>
+          <input
+            value={question}
+            onChange={(event) => setQuestion(event.target.value)}
+            placeholder="Ask about your campaigns"
+            maxLength={1000}
+            disabled={busy}
+          />
+        </label>
+        <button type="submit" className="button primary" disabled={busy || !question.trim()}>
+          Ask
+        </button>
+      </form>
+      <p className="muted small">
+        Answers come from your own campaign data, through read-only tools. The AI can be wrong, so
+        check important numbers on the dashboard.
+      </p>
+    </div>
+  );
+};
+
+export const AssistantPage = () => {
+  const status = useAiStatus();
+  return (
+    <>
+      <header className="page-header">
+        <div>
+          <h1>Assistant</h1>
+          <p className="muted">
+            Ask about your campaigns in plain language.
+            {status?.enabled ? ` Using ${status.provider}, ${status.model}.` : ''}
+          </p>
+        </div>
+      </header>
+      <section className="card">
+        {status === null ? (
+          <p className="empty">Loading…</p>
+        ) : status.enabled ? (
+          <Conversation
+            campaignId={null}
+            examples={[
+              'Which campaigns are behind, and why?',
+              'How did last week compare with the week before?',
+              'Which ad slot keeps viewers watching longest?',
+            ]}
+          />
+        ) : (
+          <AiOff status={status} />
+        )}
+      </section>
+    </>
+  );
+};
+
+const SEVERITY: Record<string, { label: string; tone: string }> = {
+  blocker: { label: 'Blocking', tone: 'serious' },
+  limit: { label: 'Limit', tone: 'warning' },
+  info: { label: 'Context', tone: 'neutral' },
+};
+
+/** Why a campaign is behind, from its own data. Needs no AI. */
+export const DeliveryCheck = ({ campaignId }: { campaignId: string }) => {
+  const [diagnosis, setDiagnosis] = useState<Diagnosis | null>(null);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    api
+      .diagnosis(campaignId)
+      .then(setDiagnosis)
+      .catch((reason: unknown) => setError(errorText(reason)));
+  }, [campaignId]);
+
+  return (
+    <section className="card">
+      <h2>Delivery check</h2>
+      <ErrorNote message={error} />
+      {diagnosis ? (
+        <>
+          <p>{diagnosis.summary}</p>
+          {diagnosis.factors.length > 0 && (
+            <ul className="factors">
+              {diagnosis.factors.map((factor) => {
+                const severity = SEVERITY[factor.severity] ?? SEVERITY['info']!;
+                return (
+                  <li key={factor.code}>
+                    <span className={`badge badge-${severity.tone}`}>{severity.label}</span>{' '}
+                    <strong>{factor.title}.</strong> {factor.detail}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          <p className="muted small">
+            Worked out from this campaign's data and the delivery forecast, with no AI.
+          </p>
+        </>
+      ) : (
+        !error && <p className="empty">Checking…</p>
+      )}
+    </section>
+  );
+};
+
+const FIELD_NAMES: Record<string, string> = {
+  budgetCents: 'Budget',
+  dailyBudgetCents: 'Daily budget',
+  cpmCents: 'CPM',
+  pacingMode: 'Pacing',
+  dailyImpressionTarget: 'Daily impression target',
+  frequencyCapPerDay: 'Frequency cap per day',
+  targetCountries: 'Countries',
+  targetDevices: 'Devices',
+  targetSlots: 'Ad slots',
+  targetGenres: 'Genres',
+  activeHours: 'Hours',
+  activeDays: 'Days',
+};
+
+const showValue = (field: string, value: unknown): string => {
+  if (value === null || value === undefined) return 'none';
+  if (Array.isArray(value)) return value.length === 0 ? 'all' : value.join(', ');
+  if (field.endsWith('Cents') && typeof value === 'number') return `€${formatNumber(value / 100)}`;
+  if (typeof value === 'number') return formatNumber(value);
+  return String(value);
+};
+
+const STATUS_LABELS: Record<Recommendation['status'], string> = {
+  PENDING: 'Waiting for approval',
+  APPLIED: 'Applied',
+  REJECTED: 'Turned down',
+  STALE: 'Out of date',
+};
+
+const Recommendations = ({
+  campaignId,
+  manages,
+  onApplied,
+}: {
+  campaignId: string;
+  manages: boolean;
+  onApplied: () => void;
+}) => {
+  const [items, setItems] = useState<Recommendation[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  const load = (): void => {
+    api
+      .recommendations(campaignId)
+      .then(setItems)
+      .catch((reason: unknown) => setError(errorText(reason)));
+  };
+  useEffect(load, [campaignId]);
+
+  const suggest = (): void => {
+    setBusy(true);
+    setError('');
+    api
+      .recommend(campaignId)
+      .then((created) => {
+        if (created.length === 0) setError('The assistant found nothing that needs changing.');
+        load();
+      })
+      .catch((reason: unknown) => setError(errorText(reason)))
+      .finally(() => setBusy(false));
+  };
+
+  const decide = (id: string, decision: 'approve' | 'reject'): void => {
+    setError('');
+    api
+      .decide(id, decision)
+      .then(() => {
+        load();
+        if (decision === 'approve') onApplied();
+      })
+      .catch((reason: unknown) => {
+        setError(errorText(reason));
+        load();
+      });
+  };
+
+  return (
+    <div>
+      <div className="card-header">
+        <h3>Recommendations</h3>
+        {manages && (
+          <button type="button" className="button" onClick={suggest} disabled={busy}>
+            {busy ? 'Thinking…' : 'Suggest changes'}
+          </button>
+        )}
+      </div>
+      <p className="muted small">
+        Suggestions change nothing until an owner or manager approves them, and an approval is
+        refused if the campaign changed in the meantime.
+      </p>
+      <ErrorNote message={error} />
+      {items && items.length > 0 && (
+        <ul className="recommendations">
+          {items.map((item) => (
+            <li key={item.id}>
+              <p>
+                <strong>{item.title}</strong>{' '}
+                <span className="muted small">
+                  · {STATUS_LABELS[item.status]} · {formatDateTime(item.createdAt)}
+                </span>
+              </p>
+              <p>{item.reason}</p>
+              <ul className="changes" aria-label="Changes">
+                {Object.keys(item.change).map((field) => (
+                  <li key={field}>
+                    {FIELD_NAMES[field] ?? field}: {showValue(field, item.before[field])} →{' '}
+                    <strong>{showValue(field, item.change[field])}</strong>
+                  </li>
+                ))}
+              </ul>
+              {manages && item.status === 'PENDING' && (
+                <div className="actions">
+                  <button
+                    type="button"
+                    className="button"
+                    onClick={() => decide(item.id, 'reject')}
+                  >
+                    Turn down
+                  </button>
+                  <button
+                    type="button"
+                    className="button primary"
+                    onClick={() => decide(item.id, 'approve')}
+                  >
+                    Apply change
+                  </button>
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+};
+
+/** The assistant on a campaign's page: questions about it, and suggested changes. */
+export const CampaignAssistant = ({
+  campaignId,
+  user,
+  onApplied,
+}: {
+  campaignId: string;
+  user: User;
+  onApplied: () => void;
+}) => {
+  const status = useAiStatus();
+  if (!status) return null;
+  return (
+    <section className="card">
+      <h2>Assistant</h2>
+      {status.enabled ? (
+        <>
+          <Conversation
+            campaignId={campaignId}
+            examples={[
+              'Why is this campaign behind?',
+              'How did it do this week compared with last?',
+            ]}
+          />
+          <Recommendations
+            campaignId={campaignId}
+            manages={canManage(user)}
+            onApplied={onApplied}
+          />
+        </>
+      ) : (
+        <AiOff status={status} />
+      )}
+    </section>
+  );
+};
+
+/** Turns a written brief into campaign form values, for the person to check and save. */
+export const DraftFromBrief = ({
+  onClose,
+  onDraft,
+}: {
+  onClose: () => void;
+  onDraft: (draft: CampaignDraft) => void;
+}) => {
+  const dialog = useRef<HTMLDialogElement>(null);
+  const [brief, setBrief] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!dialog.current?.open) dialog.current?.showModal();
+  }, []);
+
+  const submit = (event: FormEvent): void => {
+    event.preventDefault();
+    setBusy(true);
+    setError('');
+    api
+      .draftCampaign(brief)
+      .then(onDraft)
+      .catch((reason: unknown) => setError(errorText(reason)))
+      .finally(() => setBusy(false));
+  };
+
+  return (
+    <dialog ref={dialog} onClose={onClose} aria-labelledby="brief-title">
+      <form className="stack" onSubmit={submit}>
+        <h2 id="brief-title">Draft a campaign from a brief</h2>
+        <label>
+          Describe the campaign in your own words
+          <textarea
+            value={brief}
+            onChange={(event) => setBrief(event.target.value)}
+            rows={6}
+            maxLength={4000}
+            placeholder="For example: Spring coats for Nordkap Outdoor, €20,000 over four weeks from 1 March, connected TV in Germany and Austria, evenings, drama and crime fans, at most 3 views a day."
+          />
+        </label>
+        <p className="muted small">
+          The assistant fills in the campaign form. Nothing is saved until you check it and press
+          Create.
+        </p>
+        <ErrorNote message={error} />
+        <div className="actions">
+          <button type="button" className="button" onClick={() => dialog.current?.close()}>
+            Cancel
+          </button>
+          <button
+            type="submit"
+            className="button primary"
+            disabled={busy || brief.trim().length < 10}
+          >
+            {busy ? 'Drafting…' : 'Draft campaign'}
+          </button>
+        </div>
+      </form>
+    </dialog>
+  );
+};
