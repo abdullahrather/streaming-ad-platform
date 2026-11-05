@@ -389,7 +389,9 @@ export class DiagnosisService {
       now >= campaign.startsAt
         ? recentPerDay
         : forecast.expectedImpressions / Math.max(1, remainingDays - startsIn);
-    const projectedTotal = delivered + (blocked ? 0 : Math.min(hardCap, pace * remainingDays));
+    // Only days inside the flight deliver, so the wait before a later start doesn't count.
+    const projectedTotal =
+      delivered + (blocked ? 0 : Math.min(hardCap, pace * Math.max(0, remainingDays - startsIn)));
     const willReachGoal = !blocked && projectedTotal >= campaign.impressionGoal * 0.98;
     const main = factors.find(({ severity }) => severity !== 'info');
 

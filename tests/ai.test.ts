@@ -217,6 +217,35 @@ describe('Delivery diagnosis', () => {
     ).toEqual([]);
   });
 
+  it('projects a campaign that has not started over its flight only', async () => {
+    const user = await createTestUser();
+    await seedInventory(1000);
+    const auth = await login(user);
+    // The same ten-day campaign, starting in one day and in six. The wait before the start
+    // must not count as delivery days.
+    const projection = async (startsInDays: number): Promise<number> => {
+      const campaign = await createTestCampaign(user.id, {
+        impressionGoal: 100_000_000,
+        budgetCents: 100_000_000,
+        startsAt: new Date(Date.now() + startsInDays * DAY_MS),
+        endsAt: new Date(Date.now() + (startsInDays + 10) * DAY_MS),
+      });
+      await createApprovedCreative(campaign.id, user.id);
+      const res = await request(app)
+        .get(`/campaigns/${campaign.id}/diagnosis`)
+        .set('Authorization', auth);
+      await testPrisma.campaign.delete({ where: { id: campaign.id } });
+      return res.body.data.projectedTotal as number;
+    };
+
+    const soon = await projection(1);
+    const later = await projection(6);
+
+    expect(soon).toBeGreaterThan(0);
+    expect(later / soon).toBeGreaterThan(0.95);
+    expect(later / soon).toBeLessThan(1.05);
+  });
+
   it('never diagnoses another organisation’s campaign', async () => {
     const user = await createTestUser();
     const other = await createTestUser({ email: 'other@example.com' });
