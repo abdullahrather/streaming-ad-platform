@@ -607,6 +607,15 @@ describe('AI assistant: in the background', () => {
     expect(email.body).toContain(
       'Why (written by the AI assistant from your data): It has no approved ad',
     );
+
+    // The next check refreshes the numbers but keeps the explanation, with no second model call.
+    await alertsService.check();
+    const refreshed = await testPrisma.alert.findFirstOrThrow();
+    expect(refreshed.id).toBe(alert.id);
+    expect((refreshed.details as { explanation?: string }).explanation).toBe(
+      'It has no approved ad, so players skip it.',
+    );
+    expect(claude.requests).toHaveLength(1);
   });
 
   it('still sends the alert when the model fails', async () => {

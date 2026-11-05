@@ -321,10 +321,14 @@ export class AlertsService {
     `);
 
     if (!created) {
-      await prisma.alert.updateMany({
-        where: { campaignId: campaign.id, type, resolvedAt: null },
-        data: { message: finding.message, details: finding.details },
-      });
+      // Fresh numbers, keeping the AI explanation written when the alert opened.
+      await prisma.$executeRaw`
+        UPDATE alerts
+        SET message = ${finding.message},
+            details = ${details}::jsonb
+              || jsonb_strip_nulls(jsonb_build_object('explanation', details -> 'explanation'))
+        WHERE campaign_id = ${campaign.id} AND type = ${type}::"AlertType" AND resolved_at IS NULL
+      `;
       return false;
     }
 
