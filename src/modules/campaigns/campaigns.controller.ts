@@ -19,6 +19,7 @@ import {
   updateCampaignSchema,
 } from './campaigns.schema';
 import { campaignsService } from './campaigns.service';
+import { diagnosisService } from './diagnosis.service';
 import { forecastCampaign } from './forecast.service';
 
 const idOf = (req: Request): string => req.params['id'] as string;
@@ -167,6 +168,16 @@ export class CampaignsController {
       ]);
 
       res.status(200).json({ status: 'success', data: { current, previous } });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /** GET /campaigns/:id/diagnosis */
+  async diagnosis(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const data = await diagnosisService.diagnose(idOf(req), actorOf(req));
+      res.status(200).json({ status: 'success', data });
     } catch (error) {
       next(error);
     }

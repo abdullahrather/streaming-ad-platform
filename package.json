@@ -21,6 +21,7 @@
     "forecast:check": "node scripts/with-db.mjs node_modules/tsx/dist/cli.mjs scripts/forecast-check.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^1.5.0",
     "@prisma/client": "^5.14.0",
     "bcryptjs": "^2.4.3",
     "cookie-parser": "^1.4.7",

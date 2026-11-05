@@ -161,7 +161,71 @@ export interface Alert {
   message: string;
   openedAt: string;
   resolvedAt: string | null;
+  details?: { explanation?: string };
   campaign: { title: string; advertiser: string };
+}
+
+export interface DiagnosisFactor {
+  code: string;
+  severity: 'blocker' | 'limit' | 'info';
+  title: string;
+  detail: string;
+  capacity?: number;
+}
+
+export interface Diagnosis {
+  campaignId: string;
+  title: string;
+  delivered: number;
+  goal: number;
+  expectedByNow: number;
+  position: number;
+  remainingGoal: number;
+  remainingDays: number;
+  neededPerDay: number;
+  recentPerDay: number;
+  projectedTotal: number;
+  willReachGoal: boolean;
+  factors: DiagnosisFactor[];
+  summary: string;
+}
+
+export interface AiStatus {
+  enabled: boolean;
+  provider: string;
+  model: string;
+  reason: string;
+}
+
+export interface AiAnswer {
+  answer: string;
+  toolsUsed: string[];
+  refused: boolean;
+}
+
+export interface Recommendation {
+  id: string;
+  campaignId: string;
+  title: string;
+  reason: string;
+  change: Record<string, unknown>;
+  before: Record<string, unknown>;
+  status: 'PENDING' | 'APPLIED' | 'REJECTED' | 'STALE';
+  decidedAt: string | null;
+  createdAt: string;
+}
+
+export interface CampaignDraft {
+  input: Partial<CampaignInput>;
+  assumptions: string[];
+}
+
+export interface AiReview {
+  status: 'done' | 'unavailable';
+  verdict?: 'looks_fine' | 'needs_attention';
+  summary: string;
+  issues?: Array<{ kind: string; detail: string }>;
+  model: string;
 }
 
 export interface Show {
@@ -281,6 +345,7 @@ export interface Creative {
   height: number;
   failureReason: string;
   rejectionReason: string;
+  aiReview?: AiReview | null;
   videoUrl: string;
   posterUrl: string;
   createdAt: string;
@@ -547,4 +612,19 @@ export const api = {
   alerts: (status: 'open' | 'all', campaignId?: string) =>
     request<Alert[]>(withSearch('/alerts', { status, ...(campaignId ? { campaignId } : {}) })),
   setAlertEmails: (alertEmails: boolean) => patch('/account/alerts', { alertEmails }),
+
+  diagnosis: (id: string) => request<Diagnosis>(`/campaigns/${id}/diagnosis`),
+  aiStatus: () => request<AiStatus>('/ai/status'),
+  ask: (
+    question: string,
+    campaignId: string | null,
+    history: Array<{ role: 'user' | 'assistant'; content: string }>,
+  ) => post<AiAnswer>('/ai/ask', { question, campaignId, history }),
+  recommendations: (campaignId: string) =>
+    request<Recommendation[]>(`/ai/campaigns/${campaignId}/recommendations`),
+  recommend: (campaignId: string) =>
+    post<Recommendation[]>(`/ai/campaigns/${campaignId}/recommendations`),
+  decide: (id: string, decision: 'approve' | 'reject') =>
+    post<Recommendation>(`/ai/recommendations/${id}/${decision}`),
+  draftCampaign: (brief: string) => post<CampaignDraft>('/ai/draft-campaign', { brief }),
 };

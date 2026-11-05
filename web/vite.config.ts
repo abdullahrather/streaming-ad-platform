@@ -20,6 +20,7 @@ export default defineConfig({
         '/auth',
         '/account',
         '/admin',
+        '/ai',
         '/alerts',
         '/campaigns',
         '/click',

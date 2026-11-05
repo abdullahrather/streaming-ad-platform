@@ -10,6 +10,14 @@ export const ALERT_LABELS: Record<AlertType, string> = {
   SUDDEN_DROP: 'Sudden drop in impressions',
 };
 
+/** The AI assistant's explanation, when it wrote one. Labelled so nobody mistakes it for a rule. */
+const AlertExplanation = ({ alert }: { alert: Alert }) =>
+  alert.details?.explanation ? (
+    <p className="alert-explanation small">
+      <span className="badge badge-neutral">AI</span> {alert.details.explanation}
+    </p>
+  ) : null;
+
 /** Open alerts, shown above a page's numbers. Shows nothing when all is well. */
 export const OpenAlerts = ({ campaignId }: { campaignId?: string }) => {
   const { data } = useLiveData(() => api.alerts('open', campaignId), campaignId ?? 'all');
@@ -31,6 +39,7 @@ export const OpenAlerts = ({ campaignId }: { campaignId?: string }) => {
               </>
             )}
             <span className="muted">: {alert.message}</span>
+            {campaignId ? <AlertExplanation alert={alert} /> : null}
           </li>
         ))}
       </ul>
@@ -54,6 +63,7 @@ const AlertRow = ({ alert }: { alert: Alert }) => (
       <span className="muted small"> · {alert.campaign.advertiser}</span>
     </div>
     <p>{alert.message}</p>
+    <AlertExplanation alert={alert} />
     <p className="muted small">
       Opened {formatDateTime(alert.openedAt)}
       {alert.resolvedAt ? ` · resolved ${formatDateTime(alert.resolvedAt)}` : ''}

@@ -31,6 +31,8 @@ export type ForecastWarning =
 
 export interface Forecast {
   availableImpressions: number;
+  /** Matching impressions other guaranteed campaigns still need. */
+  bookedImpressions: number;
   expectedImpressions: number;
   lowImpressions: number;
   highImpressions: number;
@@ -247,6 +249,7 @@ export const forecastCampaign = async (
 
   return {
     availableImpressions: Math.round(available),
+    bookedImpressions: Math.round(booked),
     expectedImpressions: expected,
     lowImpressions: Math.round(expected * (1 - FORECAST_MARGIN)),
     highImpressions: Math.round(Math.min(limit, expected * (1 + FORECAST_MARGIN))),

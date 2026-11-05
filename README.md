@@ -26,6 +26,10 @@ Built with Node.js, TypeScript, Express, Prisma, PostgreSQL, Redis and FFmpeg, w
 |---|---|
 | ![Three campaigns compared side by side, with reach and frequency](./docs/images/compare.png) | ![A saved weekly report with its preview and email schedule](./docs/images/reports.png) |
 
+| AI assistant (optional) | Delivery check and approved changes |
+|---|---|
+| ![The assistant answering why a campaign is behind, from the campaign's own data](./docs/images/assistant.png) | ![Why a campaign is behind, worked out with no AI, and a suggested change waiting for approval](./docs/images/delivery-check.png) |
+
 | Team management | Admin console |
 |---|---|
 | ![Team members, roles and invitations](./docs/images/team.png) | ![Users, organisations and platform activity](./docs/images/admin.png) |
@@ -136,6 +140,23 @@ These limits are checked in the same atomic step that reserves the ad, so they h
 | **Alerts** | Watches for delivery falling behind, budget running out early and sudden drops, and emails once when one starts |
 
 The demo opens real alerts on its own data within seconds of starting: two campaigns are behind schedule. See [how reporting and alerts work](./docs/reporting.md), including why PostgreSQL is still enough.
+
+### Delivery check and AI assistant
+
+Every campaign page has a **delivery check** that says whether the campaign will reach its goal and what holds it back: being paused, having no approved ad, too little matching traffic, the budget, a daily limit or the frequency cap. It's worked out from the campaign's data and the forecast, with no AI.
+
+The **AI assistant** is optional and off by default. Whoever runs the platform turns it on in `.env`, with Claude (their own API key), any OpenAI-compatible API, or a free local model through [Ollama](https://ollama.com) with no key and no data leaving the machine.
+
+| Feature | What it does |
+|---|---|
+| **Questions** | Answers questions like "why is this campaign behind?" in plain language, using read-only tools that see only what the person asking can see |
+| **Suggested changes** | Proposes setting changes with the numbers behind them. Nothing changes until an owner or manager approves, and an approval is refused if the campaign changed since |
+| **Draft from a brief** | Turns a written brief into a filled-in campaign form to check and save, listing every value it assumed |
+| **Alert explanations** | Adds a short "why" to new alerts and their emails |
+| **Weekly summaries** | Adds "what changed and why" to scheduled report emails |
+| **Ad checks** | Gives reviewers a first look at each new ad's poster frame. Advice only: a person still approves every ad |
+
+See [how the AI assistant works](./docs/ai.md), including what it can see, how changes are approved, and how it was tested.
 
 Viewing profiles exist only for viewers who consented. They expire after 90 days, and a viewer can delete theirs at any time.
 
@@ -252,6 +273,7 @@ Dashboard routes need `Authorization: Bearer <token>` from login. Ad server rout
 | `GET` | `/campaigns/analytics/summary` | Totals for a period and the period before it |
 | `GET` | `/campaigns/compare` | Two to four campaigns side by side, with `ids` |
 | `GET` | `/campaigns/:id/analytics` | One campaign with its trend, breakdowns, reach and frequency |
+| `GET` | `/campaigns/:id/diagnosis` | Why a campaign is behind and whether it will reach its goal, with no AI |
 | `POST` | `/campaigns/forecast` | Predict delivery and reach before launching |
 | `GET` | `/segments` | List audience segments |
 | `POST` | `/segments` | Create an audience segment |
@@ -259,6 +281,11 @@ Dashboard routes need `Authorization: Bearer <token>` from login. Ad server rout
 | `POST` | `/reports/export` | Download a report as CSV or PDF, with `format` |
 | | `/reports/*` | Save, schedule, download and send saved reports |
 | `GET` | `/alerts` | Campaign alerts, with `status=open` or `all` |
+| `GET` | `/ai/status` | Whether the AI assistant is on, and which model it uses |
+| `POST` | `/ai/ask` | Ask a question about your campaigns |
+| | `/ai/campaigns/:id/recommendations` | List or ask for suggested changes |
+| `POST` | `/ai/recommendations/:id/approve` | Apply a suggested change; also `/reject` |
+| `POST` | `/ai/draft-campaign` | Draft a campaign from a written brief |
 | `GET` | `/shows` | The show catalogue |
 | `GET` | `/ad-decision` | Choose an ad: `showId`, `slot`, `country`, `device` |
 | `POST` | `/events` | Queue a batch of ad events, each with an `eventId` and `occurredAt` |
@@ -269,7 +296,7 @@ Dashboard routes need `Authorization: Bearer <token>` from login. Ad server rout
 prisma/          Database schema, migrations and demo data
 scripts/         Local database and dev startup
 src/lib/         Storage, video conversion, email, security
-src/modules/     account, admin, alerts, audit, auth, campaigns, creatives, delivery, demo, dev,
+src/modules/     account, admin, ai, alerts, audit, auth, campaigns, creatives, delivery, demo, dev,
                  docs, playback, reports, segments, shows, team
 src/middleware/  Sign-in and permission guards, API key guard, error handling
 tests/           Integration tests against a real PostgreSQL
@@ -319,6 +346,7 @@ This is a working demonstration, not a system that has run under real load.
 - `/ad-decision` and `/events` share one API key, which suits a trusted ad server.
 - Sign-ups, invitations, reports and alerts need `SMTP_URL` for real email; without it, messages stay in the local mailbox.
 - Reach is an estimate, usually within 1 to 2%, and alert thresholds are the same for every campaign. See [how reporting and alerts work](./docs/reporting.md#limits).
+- The AI assistant was tested end to end with a small local model, which answers "why is this campaign behind?" correctly but makes poor suggestions and drafts. Claude was tested only against a stand-in server, not the live API. See [the AI assistant's limits](./docs/ai.md#limits).
 
 ## Contributing
 

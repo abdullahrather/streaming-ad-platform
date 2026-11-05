@@ -83,6 +83,13 @@ enum ReportSchedule {
   WEEKLY
 }
 
+enum RecommendationStatus {
+  PENDING
+  APPLIED
+  REJECTED
+  STALE
+}
+
 enum AlertType {
   UNDER_DELIVERY
   BUDGET_BURN
@@ -138,13 +145,14 @@ model Organisation {
   suspendedAt DateTime? @map("suspended_at") @db.Timestamptz(3)
   createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
 
-  memberships Membership[]
-  campaigns   Campaign[]
-  invitations Invitation[]
-  sessions    Session[]
-  segments    AudienceSegment[]
-  reports     Report[]
-  alerts      Alert[]
+  memberships     Membership[]
+  campaigns       Campaign[]
+  invitations     Invitation[]
+  sessions        Session[]
+  segments        AudienceSegment[]
+  reports         Report[]
+  alerts          Alert[]
+  recommendations AiRecommendation[]
 
   @@map("organisations")
 }
@@ -304,11 +312,12 @@ model Campaign {
   createdAt             DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt             DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
-  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  metrics      Metric[]
-  creatives    Creative[]
-  alerts       Alert[]
+  organisation    Organisation       @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  user            User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  metrics         Metric[]
+  creatives       Creative[]
+  alerts          Alert[]
+  recommendations AiRecommendation[]
 
   @@index([organisationId])
   @@index([userId])
@@ -335,6 +344,8 @@ model Creative {
   sizeBytes       Int            @default(0) @map("size_bytes")
   failureReason   String         @default("") @map("failure_reason")
   rejectionReason String         @default("") @map("rejection_reason")
+  /// The AI content check, which only advises the reviewer. Empty until it has run.
+  aiReview        Json?          @map("ai_review")
   createdById     String         @map("created_by_id")
   reviewedById    String?        @map("reviewed_by_id")
   reviewedAt      DateTime?      @map("reviewed_at") @db.Timestamptz(3)
@@ -500,4 +511,29 @@ model Alert {
   @@index([organisationId, openedAt])
   @@index([campaignId])
   @@map("alerts")
+}
+
+/// A change the AI assistant suggests. Nothing changes until an owner or manager approves it.
+model AiRecommendation {
+  id             String               @id @default(cuid())
+  organisationId String               @map("organisation_id")
+  campaignId     String               @map("campaign_id")
+  createdById    String               @map("created_by_id")
+  title          String
+  reason         String
+  /// Fields to change, in the same shape as PATCH /campaigns/:id.
+  change         Json
+  /// Those fields as they were, so an approval can tell if the campaign changed since.
+  before         Json
+  status         RecommendationStatus @default(PENDING)
+  decidedById    String?              @map("decided_by_id")
+  decidedAt      DateTime?            @map("decided_at") @db.Timestamptz(3)
+  createdAt      DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  campaign     Campaign     @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId, status])
+  @@index([organisationId, createdAt])
+  @@map("ai_recommendations")
 }

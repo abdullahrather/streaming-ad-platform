@@ -5,11 +5,13 @@
  * due report is claimed by moving its next run time forward in one conditional
  * update, so when several API processes check at once only one of them sends it.
  */
-import { ReportSchedule, type Report } from '@prisma/client';
+import { ReportGrouping, ReportSchedule, type Report } from '@prisma/client';
 import { env } from '@/config/env';
 import { deliverEmail } from '@/lib/mailer';
 import { prisma } from '@/lib/prisma';
+import { aiProvider } from '@/modules/ai/ai.config';
 import { toCsv, toPdf, periodLabel } from './reports.export';
+import type { ReportColumn } from './reports.schema';
 import { nextRunAfter, reportWindow, reportsService } from './reports.service';
 
 const DUE_BATCH = 20;
@@ -33,6 +35,65 @@ const fileStem = (report: Report, to: Date): string =>
       .replace(/^-|-$/g, '')
       .toLowerCase() || 'report'
   }-${to.toISOString().slice(0, 10)}`;
+
+/**
+ * With the AI assistant on, a short "what changed and why" written from the same
+ * numbers. Without it, or if it fails, the email simply goes without.
+ */
+const whatChanged = async (
+  report: Report,
+  now: Date,
+  facts: {
+    totals: Record<string, number | undefined>;
+    before: Record<string, number | undefined>;
+    alerts: Array<{
+      campaignId: string;
+      type: string;
+      message: string;
+      campaign: { title: string };
+    }>;
+  },
+): Promise<string[]> => {
+  if (!aiProvider()) return [];
+  const { aiService } = await import('@/modules/ai/ai.service');
+  const scope = { organisationId: report.organisationId };
+  const columns: ReportColumn[] = ['impressions', 'ctr', 'completionRate', 'spend'];
+  const definition = {
+    campaignIds: report.campaignIds,
+    groupBy: ReportGrouping.CAMPAIGN,
+    columns,
+    rangeDays: report.rangeDays,
+  };
+  const { from } = reportWindow(report.rangeDays, now);
+  const [current, previous] = await Promise.all([
+    reportsService.run(scope, definition, now),
+    reportsService.run(scope, definition, new Date(from.getTime() - 1)),
+  ]);
+  const summary = await aiService.summarisePeriod(report.organisationId, {
+    period_days: report.rangeDays,
+    totals: { current: facts.totals, previous: facts.before },
+    campaigns: current.rows.map((row) => ({
+      campaign: row.label,
+      current: row.values,
+      previous: previous.rows.find((earlier) => earlier.key === row.key)?.values ?? null,
+    })),
+    open_alerts: facts.alerts.map((alert) => ({
+      campaign: alert.campaign.title,
+      type: alert.type,
+      message: alert.message,
+    })),
+    at_risk_campaign_ids: [
+      ...new Set(
+        facts.alerts
+          .filter(({ type }) => type === 'UNDER_DELIVERY')
+          .map(({ campaignId }) => campaignId),
+      ),
+    ].slice(0, 3),
+  });
+  return summary
+    ? ['What changed and why (written by the AI assistant from these numbers):', summary, '']
+    : [];
+};
 
 /** Sends one report to its recipients who are still members. Returns how many got it. */
 export const sendReport = async (report: Report, now = new Date()): Promise<number> => {
@@ -90,6 +151,7 @@ export const sendReport = async (report: Report, now = new Date()): Promise<numb
     `Completion rate: ${(totals.completionRate ?? 0).toFixed(1)}%`,
     `Spend: ${formatEuros(totals.spend ?? 0)}${change(totals.spend ?? 0, before.spend ?? 0, days)}`,
     '',
+    ...(await whatChanged(report, now, { totals, before, alerts }).catch(() => [])),
     alerts.length === 0
       ? 'No open alerts.'
       : `Open alerts (${alerts.length}):\n${alerts.map((alert) => `- ${alert.campaign.title}: ${alert.message}`).join('\n')}`,

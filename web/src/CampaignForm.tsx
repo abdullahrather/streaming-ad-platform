@@ -3,6 +3,7 @@ import {
   api,
   ApiError,
   type Campaign,
+  type CampaignDraft,
   type CampaignInput,
   type Forecast,
   type Segment,
@@ -111,43 +112,49 @@ const CheckGroup = ({
 
 const CampaignForm = ({
   campaign,
+  draft,
   onClose,
   onSaved,
 }: {
   campaign?: Campaign;
+  /** Starting values from the assistant, saved as a new campaign. */
+  draft?: CampaignDraft;
   onClose: () => void;
   onSaved: (id: string) => void;
 }) => {
   const dialog = useRef<HTMLDialogElement>(null);
   const today = new Date();
-  const [title, setTitle] = useState(campaign?.title ?? '');
-  const [advertiser, setAdvertiser] = useState(campaign?.advertiser ?? '');
-  const [budget, setBudget] = useState(campaign ? String(campaign.budgetCents / 100) : '10000');
-  const [cpm, setCpm] = useState(campaign ? String(campaign.cpmCents / 100) : '20');
-  const [startsAt, setStartsAt] = useState(toDateInput(campaign?.startsAt ?? today));
+  const initial: Partial<Omit<CampaignInput, 'status'>> | undefined = campaign ?? draft?.input;
+  const [title, setTitle] = useState(initial?.title ?? '');
+  const [advertiser, setAdvertiser] = useState(initial?.advertiser ?? '');
+  const [budget, setBudget] = useState(
+    initial?.budgetCents ? String(initial.budgetCents / 100) : '10000',
+  );
+  const [cpm, setCpm] = useState(initial?.cpmCents ? String(initial.cpmCents / 100) : '20');
+  const [startsAt, setStartsAt] = useState(toDateInput(initial?.startsAt ?? today));
   const [endsAt, setEndsAt] = useState(
-    toDateInput(campaign?.endsAt ?? new Date(today.getTime() + 30 * 86_400_000)),
+    toDateInput(initial?.endsAt ?? new Date(today.getTime() + 30 * 86_400_000)),
   );
-  const [countries, setCountries] = useState(campaign?.targetCountries ?? []);
-  const [genres, setGenres] = useState(campaign?.targetGenres ?? []);
-  const [devices, setDevices] = useState(campaign?.targetDevices ?? []);
-  const [slots, setSlots] = useState(campaign?.targetSlots ?? []);
-  const [segmentIds, setSegmentIds] = useState(campaign?.targetSegmentIds ?? []);
+  const [countries, setCountries] = useState(initial?.targetCountries ?? []);
+  const [genres, setGenres] = useState(initial?.targetGenres ?? []);
+  const [devices, setDevices] = useState(initial?.targetDevices ?? []);
+  const [slots, setSlots] = useState(initial?.targetSlots ?? []);
+  const [segmentIds, setSegmentIds] = useState(initial?.targetSegmentIds ?? []);
   const [segments, setSegments] = useState<Segment[]>([]);
-  const [deliveryType, setDeliveryType] = useState(campaign?.deliveryType ?? 'GUARANTEED');
-  const [pacingMode, setPacingMode] = useState(campaign?.pacingMode ?? 'EVEN');
+  const [deliveryType, setDeliveryType] = useState(initial?.deliveryType ?? 'GUARANTEED');
+  const [pacingMode, setPacingMode] = useState(initial?.pacingMode ?? 'EVEN');
   const [dailyBudget, setDailyBudget] = useState(
-    campaign?.dailyBudgetCents ? String(campaign.dailyBudgetCents / 100) : '',
+    initial?.dailyBudgetCents ? String(initial.dailyBudgetCents / 100) : '',
   );
-  const [dailyTarget, setDailyTarget] = useState(String(campaign?.dailyImpressionTarget ?? ''));
-  const [frequencyCap, setFrequencyCap] = useState(String(campaign?.frequencyCapPerDay ?? ''));
-  const [category, setCategory] = useState(campaign?.competitiveCategory ?? '');
+  const [dailyTarget, setDailyTarget] = useState(String(initial?.dailyImpressionTarget ?? ''));
+  const [frequencyCap, setFrequencyCap] = useState(String(initial?.frequencyCapPerDay ?? ''));
+  const [category, setCategory] = useState(initial?.competitiveCategory ?? '');
   const [dayparts, setDayparts] = useState(
     DAYPARTS.filter(([, , hours]) =>
-      hours.every((hour) => campaign?.activeHours.includes(hour)),
+      hours.every((hour) => initial?.activeHours?.includes(hour)),
     ).map(([id]) => id),
   );
-  const [weekdays, setWeekdays] = useState((campaign?.activeDays ?? []).map(String));
+  const [weekdays, setWeekdays] = useState((initial?.activeDays ?? []).map(String));
   const [forecast, setForecast] = useState<Forecast | null>(null);
   const [allGenres, setAllGenres] = useState<string[]>([]);
   const [error, setError] = useState('');
@@ -228,6 +235,21 @@ const CampaignForm = ({
     <dialog ref={dialog} onClose={onClose} aria-labelledby="form-title">
       <form onSubmit={(event) => void submit(event)}>
         <h2 id="form-title">{campaign ? 'Edit campaign' : 'New campaign'}</h2>
+        {draft && (
+          <div className="notice">
+            <p>
+              <strong>Drafted by the AI assistant from your brief.</strong> Check every field before
+              you create it.
+            </p>
+            {draft.assumptions.length > 0 && (
+              <ul className="small">
+                {draft.assumptions.map((assumption) => (
+                  <li key={assumption}>{assumption}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
 
         <div className="fields">
           <label className="wide">

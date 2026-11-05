@@ -1019,3 +1019,122 @@ dialog form {
 .report-builder .checks {
   margin-top: 1rem;
 }
+
+/* ─── AI assistant ─────────────────────────────────────────────────────────────── */
+
+.ai-off {
+  padding: 0.85rem 1rem;
+  border: 1px dashed var(--axis);
+  border-radius: 12px;
+}
+
+.ai-off code {
+  overflow-wrap: anywhere;
+}
+
+.conversation {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.examples {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.examples p {
+  margin: 0;
+}
+
+.turns {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.turn {
+  max-width: min(46rem, 100%);
+  padding: 0.65rem 0.85rem;
+  border-radius: 12px;
+}
+
+.turn p {
+  margin: 0.25rem 0 0;
+}
+
+.turn-user {
+  align-self: flex-end;
+  background: var(--track);
+}
+
+.turn-assistant {
+  align-self: flex-start;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.turn-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.ask {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-end;
+}
+
+.ask .wide {
+  flex: 1;
+}
+
+.factors,
+.recommendations {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin: 0.5rem 0;
+  padding: 0;
+  list-style: none;
+}
+
+.recommendations > li {
+  padding: 0.75rem 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.changes {
+  margin: 0.4rem 0;
+  padding-left: 1.1rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.alert-explanation {
+  margin: 0.3rem 0;
+  color: var(--ink-2);
+}
+
+.ai-advice {
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.ai-advice p,
+.ai-advice ul {
+  margin: 0.25rem 0;
+}
+
+@media (max-width: 640px) {
+  .ask {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

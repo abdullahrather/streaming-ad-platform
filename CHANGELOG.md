@@ -6,6 +6,18 @@ The main changes in each version. Every release's full notes are on the [Release
 
 ### Added
 
+- A delivery check on every campaign page: whether it will reach its goal, and the main reason if not, worked out with no AI
+- An optional AI assistant, off by default, using Claude, any OpenAI-compatible API, or a free local model through Ollama
+- Questions about campaigns in plain language, answered with read-only tools scoped to the person asking
+- Suggested setting changes that apply only when an owner or manager approves them
+- Campaign drafts from a written brief
+- AI explanations on new alerts, a "what changed and why" paragraph in scheduled reports, and a first look at new ads for reviewers
+- `AI_PROVIDER`, `AI_API_KEY`, `AI_MODEL`, `AI_BASE_URL`, `AI_TIMEOUT_MS` and `AI_RATE_LIMIT` settings
+
+## 1.6.0
+
+### Added
+
 - Reach and average frequency for any period, from daily HyperLogLog sketches
 - The change against the previous period on every headline number
 - A page that compares two to four campaigns side by side
