@@ -9,6 +9,10 @@ export const RANGES = [
   { id: '30d', label: '30 days', hours: 24 * 30 },
 ];
 
+/** What a range is compared with, such as "previous 7 days". */
+export const previousLabel = (id: string): string =>
+  `previous ${RANGES.find((range) => range.id === id)?.label ?? 'period'}`;
+
 export const rangeFor = (id: string): Range => {
   const hours = RANGES.find((range) => range.id === id)?.hours ?? 24 * 7;
   const to = new Date();

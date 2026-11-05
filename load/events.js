@@ -7,6 +7,8 @@ import { Counter } from 'k6/metrics';
 const { RATE, DURATION, BATCH, CAMPAIGN, SHOW, KEY, TARGETS, RUN } = __ENV;
 
 const batchSize = Number(BATCH);
+// A million made-up viewers, so reach sketches fill as they would on a real service.
+const VIEWERS = 1_000_000;
 const requestsPerSecond = Math.ceil(Number(RATE) / batchSize);
 const targets = TARGETS.split(',');
 
@@ -48,6 +50,8 @@ export default function send() {
       country: 'DE',
       device: 'CTV',
       occurredAt,
+      // Real players identify viewers, which also counts them towards reach.
+      viewerId: `viewer-${Math.floor(Math.random() * VIEWERS)}`,
     });
   }
 

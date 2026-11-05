@@ -20,7 +20,7 @@ import {
   Device,
 } from '@prisma/client';
 import type { Prisma } from '@prisma/client';
-import { randomBytes } from 'crypto';
+import { createHash, randomBytes } from 'crypto';
 import bcrypt from 'bcryptjs';
 import { Redis } from 'ioredis';
 import {
@@ -36,6 +36,12 @@ const prisma = new PrismaClient();
 
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
+// Seeded reach: viewers see an ad about 2.5 times a day, and each campaign's viewers
+// come from a pool four times its busiest day.
+const DAILY_FREQUENCY = 2.5;
+const MAX_DAILY_VIEWERS = 40_000;
+const POOL_DAYS = 4;
+const SHARED_VIEWER_SHARE = 0.3;
 const COUNTRIES = ['DE', 'FR', 'IT', 'ES', 'NL', 'AT', 'SE'];
 const DEVICES = [Device.CTV, Device.CTV, Device.CTV, Device.MOBILE, Device.WEB, Device.TABLET];
 const SLOTS = [AdSlot.PRE_ROLL, AdSlot.MID_ROLL, AdSlot.MID_ROLL, AdSlot.POST_ROLL];
@@ -362,6 +368,81 @@ async function createDemoMedia(
   }
 }
 
+/**
+ * Daily reach sketches for the seeded history, so reach and frequency have something
+ * to show. Each campaign draws its viewers from its own pool, so the same people come
+ * back on different days, plus a shared pool so some viewers see several campaigns.
+ * Viewer IDs are made up.
+ */
+async function createReach(
+  rows: Prisma.MetricCreateManyInput[],
+  random: () => number,
+): Promise<void> {
+  const daily = new Map<string, Map<string, number>>();
+  for (const row of rows) {
+    const day = new Date(row.bucket).toISOString().slice(0, 10);
+    const days = daily.get(row.campaignId) ?? new Map<string, number>();
+    days.set(day, (days.get(day) ?? 0) + (row.impressions ?? 0));
+    daily.set(row.campaignId, days);
+  }
+
+  const redis = new Redis(process.env['REDIS_URL'] ?? 'redis://localhost:6379');
+  for (const [campaignId, days] of daily) {
+    const viewersByDay = new Map(
+      [...days].map(([day, impressions]) => [
+        day,
+        Math.min(MAX_DAILY_VIEWERS, Math.round(impressions / DAILY_FREQUENCY)),
+      ]),
+    );
+    const pool = Math.max(1, Math.max(...viewersByDay.values()) * POOL_DAYS);
+
+    for (const [day, viewers] of viewersByDay) {
+      const pipeline = redis.pipeline();
+      for (let start = 0; start < viewers; start += 1000) {
+        const ids = Array.from(
+          { length: Math.min(1000, viewers - start) },
+          // Some viewers watch several campaigns' shows, most only this one's.
+          // Hashed the same way as the event script, which uses redis.sha1hex.
+          () =>
+            createHash('sha1')
+              .update(
+                random() < SHARED_VIEWER_SHARE
+                  ? `seed-viewer-shared-${Math.floor(random() * pool)}`
+                  : `seed-viewer-${campaignId}-${Math.floor(random() * pool)}`,
+              )
+              .digest('hex'),
+        );
+        pipeline.pfadd(`reach:${campaignId}:${day}`, ...ids);
+        pipeline.pfadd(`reach:${campaignId}`, ...ids);
+      }
+      pipeline.expire(`reach:${campaignId}:${day}`, 400 * 24 * 3600);
+      await pipeline.exec();
+    }
+  }
+  redis.disconnect();
+}
+
+/** The next time it's this hour on this weekday in Berlin, for the demo report's schedule. */
+const nextWeekdayAt = (weekday: number, hour: number): Date => {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: process.env['PLATFORM_TIMEZONE'] ?? 'Europe/Berlin',
+    weekday: 'short',
+    hour: 'numeric',
+    hourCycle: 'h23',
+  });
+  let time = Math.floor(Date.now() / HOUR) * HOUR + HOUR;
+  for (let step = 0; step < 8 * 24; step += 1, time += HOUR) {
+    const local = parts.formatToParts(time);
+    const day = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(
+      local.find((part) => part.type === 'weekday')?.value ?? '',
+    );
+    if (day === weekday && Number(local.find((part) => part.type === 'hour')?.value) === hour) {
+      break;
+    }
+  }
+  return new Date(time);
+};
+
 /** Queued events and counters belong to the data being replaced. */
 async function clearLiveCounters(): Promise<void> {
   const redis = new Redis(process.env['REDIS_URL'] ?? 'redis://localhost:6379');
@@ -567,6 +648,32 @@ async function main(): Promise<void> {
       { organisationId: brightline.id, name: 'Sports fans', genres: ['Sports'] },
       { organisationId: brightline.id, name: 'Families', genres: ['Kids', 'Reality'], minViews: 2 },
     ],
+  });
+
+  await createReach(rows, random);
+
+  await prisma.report.create({
+    data: {
+      organisationId: brightline.id,
+      createdById: owner.id,
+      name: 'Weekly campaign summary',
+      groupBy: 'CAMPAIGN',
+      columns: [
+        'impressions',
+        'clicks',
+        'ctr',
+        'completionRate',
+        'spend',
+        'reach',
+        'averageFrequency',
+      ],
+      rangeDays: 7,
+      schedule: 'WEEKLY',
+      sendWeekday: 1,
+      sendHour: 8,
+      recipientIds: [owner.id, analyst.id],
+      nextRunAt: nextWeekdayAt(1, 8),
+    },
   });
 
   await createInventory();

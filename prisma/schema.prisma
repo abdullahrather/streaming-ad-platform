@@ -68,6 +68,27 @@ enum AdSlot {
   POST_ROLL
 }
 
+enum ReportGrouping {
+  DAY
+  CAMPAIGN
+  SLOT
+  COUNTRY
+  DEVICE
+  SHOW
+}
+
+enum ReportSchedule {
+  NONE
+  DAILY
+  WEEKLY
+}
+
+enum AlertType {
+  UNDER_DELIVERY
+  BUDGET_BURN
+  SUDDEN_DROP
+}
+
 enum Device {
   CTV
   MOBILE
@@ -122,6 +143,8 @@ model Organisation {
   invitations Invitation[]
   sessions    Session[]
   segments    AudienceSegment[]
+  reports     Report[]
+  alerts      Alert[]
 
   @@map("organisations")
 }
@@ -130,6 +153,8 @@ model Membership {
   userId         String           @map("user_id")
   organisationId String           @map("organisation_id")
   role           OrganisationRole
+  /// Whether this member gets campaign alerts by email.
+  alertEmails    Boolean          @default(true) @map("alert_emails")
   createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
 
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -217,12 +242,14 @@ model AuditLog {
 
 /// Emails kept for the local mailbox when no mail server is configured.
 model CapturedEmail {
-  id        String   @id @default(cuid())
-  recipient String
-  subject   String
-  body      String
-  link      String   @default("")
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  id          String   @id @default(cuid())
+  recipient   String
+  subject     String
+  body        String
+  link        String   @default("")
+  /// Files sent with the email: filename, contentType and base64 content.
+  attachments Json     @default("[]")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 
   @@index([createdAt])
   @@map("captured_emails")
@@ -281,6 +308,7 @@ model Campaign {
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   metrics      Metric[]
   creatives    Creative[]
+  alerts       Alert[]
 
   @@index([organisationId])
   @@index([userId])
@@ -422,4 +450,54 @@ model Metric {
   @@id([campaignId, bucket, showId, slot, country, device])
   @@index([bucket])
   @@map("metrics")
+}
+
+/// A saved report: which campaigns, how rows are grouped, which columns, and when it's emailed.
+model Report {
+  id             String         @id @default(cuid())
+  organisationId String         @map("organisation_id")
+  createdById    String         @map("created_by_id")
+  name           String
+  /// Empty means every campaign in the organisation.
+  campaignIds    String[]       @default([]) @map("campaign_ids")
+  groupBy        ReportGrouping @default(DAY) @map("group_by")
+  columns        String[]
+  /// Each run covers this many days up to the moment it runs.
+  rangeDays      Int            @default(7) @map("range_days")
+  schedule       ReportSchedule @default(NONE)
+  /// 0 is Sunday. Only used by weekly reports.
+  sendWeekday    Int            @default(1) @map("send_weekday")
+  /// Hour in the platform time zone.
+  sendHour       Int            @default(8) @map("send_hour")
+  /// Members of the organisation who receive it.
+  recipientIds   String[]       @default([]) @map("recipient_ids")
+  nextRunAt      DateTime?      @map("next_run_at") @db.Timestamptz(3)
+  lastSentAt     DateTime?      @map("last_sent_at") @db.Timestamptz(3)
+  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+
+  @@index([organisationId])
+  @@index([nextRunAt])
+  @@map("reports")
+}
+
+/// A problem with a campaign. One stays open per campaign and type until it clears.
+model Alert {
+  id             String    @id @default(cuid())
+  organisationId String    @map("organisation_id")
+  campaignId     String    @map("campaign_id")
+  type           AlertType
+  message        String
+  details        Json      @default("{}")
+  openedAt       DateTime  @default(now()) @map("opened_at") @db.Timestamptz(3)
+  resolvedAt     DateTime? @map("resolved_at") @db.Timestamptz(3)
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  campaign     Campaign     @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([organisationId, openedAt])
+  @@index([campaignId])
+  @@map("alerts")
 }

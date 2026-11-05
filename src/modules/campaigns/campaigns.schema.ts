@@ -131,3 +131,32 @@ export const dateRangeSchema = z
   });
 
 export type DateRange = z.infer<typeof dateRangeSchema>;
+
+export const MAX_COMPARED = 4;
+
+export const compareQuerySchema = z
+  .object({
+    ids: z
+      .string()
+      .transform((value) => [
+        ...new Set(
+          value
+            .split(',')
+            .map((id) => id.trim())
+            .filter(Boolean),
+        ),
+      ])
+      .pipe(
+        z
+          .array(z.string().max(64))
+          .min(2, { error: 'Choose at least two campaigns to compare.' })
+          .max(MAX_COMPARED, { error: `Compare at most ${MAX_COMPARED} campaigns.` }),
+      ),
+  })
+  .and(dateRangeSchema);
+
+/** The period of the same length just before a range, for period-over-period change. */
+export const previousRange = ({ from, to }: DateRange): DateRange => ({
+  from: new Date(from.getTime() - (to.getTime() - from.getTime())),
+  to: from,
+});

@@ -35,6 +35,8 @@ const envSchema = z.object({
   LOGIN_RATE_LIMIT: z.coerce.number().int().positive().default(20),
   REDIS_URL: z.string().default('redis://localhost:6379'),
   RUN_EVENT_WORKER: z.stringbool().default(true),
+  RUN_SCHEDULER: z.stringbool().default(true),
+  ALERT_CHECK_MS: z.coerce.number().int().positive().default(300_000),
   EVENT_DEDUPE_SECONDS: z.coerce.number().int().positive().default(3600),
   DECISION_CACHE_MS: z.coerce.number().int().nonnegative().default(5000),
   MAX_ADS_PER_VIEWER_MINUTE: z.coerce.number().int().positive().default(30),

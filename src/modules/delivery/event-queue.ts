@@ -15,7 +15,7 @@ import { Prisma } from '@prisma/client';
 import type { Redis } from 'ioredis';
 import { env } from '@/config/env';
 import { prisma } from '@/lib/prisma';
-import { createBlockingRedis, redis } from '@/lib/redis';
+import { createBlockingRedis, reachDay, redis } from '@/lib/redis';
 import type { EventType } from './delivery.schema';
 import { flushInventory } from './viewer-activity';
 
@@ -121,9 +121,10 @@ const push = (
   eventId: string,
   deliveredTo: string,
   viewerId: string,
+  day: string,
   event: StoredEvent,
 ): void => {
-  fields.push(eventId, deliveredTo, viewerId, JSON.stringify(event));
+  fields.push(eventId, deliveredTo, viewerId, day, JSON.stringify(event));
 };
 
 /** Queues a batch. Events already seen are dropped, so sending a batch twice is safe. */
@@ -136,6 +137,7 @@ export const enqueueEvents = async (events: QueuedEvent[]): Promise<EnqueueResul
       event.eventId,
       isImpression ? event.campaignId : '',
       isImpression ? (event.viewerId ?? '') : '',
+      reachDay(event.occurredAt),
       {
         t: event.type,
         c: event.campaignId,
@@ -157,7 +159,7 @@ export const enqueueEvents = async (events: QueuedEvent[]): Promise<EnqueueResul
 /** Records traffic that was rejected, so it can be reported but never billed. */
 export const enqueueFiltered = async (traffic: FilteredTraffic): Promise<void> => {
   const fields: string[] = [];
-  push(fields, traffic.eventId, '', '', {
+  push(fields, traffic.eventId, '', '', '', {
     f: traffic.reason,
     c: traffic.campaignId ?? '',
     b: hourOf(Date.now()),

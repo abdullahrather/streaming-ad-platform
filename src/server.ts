@@ -12,6 +12,7 @@ import { createApp } from './app';
 import { env } from '@/config/env';
 import { prisma } from '@/lib/prisma';
 import { creativesService } from '@/modules/creatives/creatives.service';
+import { startScheduler } from '@/modules/alerts/scheduler';
 import { startEventWorker } from '@/modules/delivery/event-queue';
 import { startTraffic } from '@/modules/demo/traffic';
 
@@ -25,6 +26,7 @@ const server = app.listen({ port: env.PORT, backlog: CONNECTION_BACKLOG }, () =>
   console.info(`📋  Environment: ${env.NODE_ENV}`);
   console.info(`🏥  Health check: http://localhost:${env.PORT}/health`);
   if (env.RUN_EVENT_WORKER) startEventWorker();
+  if (env.RUN_SCHEDULER) startScheduler();
   startTraffic();
   creativesService
     .resumeProcessing()

@@ -61,6 +61,8 @@ export interface Profile {
   twoFactorEnabled: boolean;
   organisationId: string | null;
   organisationRole: OrganisationRole | null;
+  /** Whether campaign alerts for the active organisation are emailed. */
+  alertEmails: boolean;
   organisations: Array<{ id: string; name: string; role: OrganisationRole }>;
 }
 
@@ -396,6 +398,9 @@ export class AuthService {
       twoFactorEnabled: user.twoFactorEnabledAt !== null,
       organisationId: actor.organisationId,
       organisationRole: actor.organisationRole,
+      alertEmails:
+        user.memberships.find(({ organisationId }) => organisationId === actor.organisationId)
+          ?.alertEmails ?? false,
       organisations: user.memberships.map(({ organisation, role }) => ({ ...organisation, role })),
     };
   }

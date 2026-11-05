@@ -23,6 +23,9 @@ const redisUrl = new URL(process.env['REDIS_URL'] ?? 'redis://localhost:6379');
 redisUrl.pathname = '/1';
 process.env['REDIS_URL'] = redisUrl.toString();
 process.env['RUN_EVENT_WORKER'] = 'false';
+process.env['RUN_SCHEDULER'] = 'false';
+// Schedules and report days are checked against Berlin, daylight saving included.
+process.env['PLATFORM_TIMEZONE'] = 'Europe/Berlin';
 process.env['DECISION_CACHE_MS'] = '0';
 process.env['MIN_COMPLETION_RATIO'] = '0';
 process.env['MAX_ADS_PER_VIEWER_MINUTE'] = '20';

@@ -76,6 +76,7 @@ const serverEnv = {
   ...process.env,
   NODE_ENV: 'production',
   RUN_EVENT_WORKER: 'false',
+  RUN_SCHEDULER: 'false',
   SIMULATE_TRAFFIC: 'off',
   DATABASE_URL: process.env.DATABASE_URL,
 };
@@ -181,6 +182,19 @@ try {
     ['Failed requests', `${(failedRate(events) * 100).toFixed(3)}%`],
     ['Queue emptied after the test in', `${drainSeconds.toFixed(1)} s`],
   );
+
+  // Each impression comes from one of a million viewers at random, so the expected
+  // number of different viewers is 1,000,000 × (1 - e^(-impressions / 1,000,000)).
+  const viewers = 1_000_000;
+  const expectedReach = viewers * (1 - Math.exp(-accepted / viewers));
+  const reach = await redis.pfcount(`reach:${eventsCampaign}`);
+  const reachError = expectedReach > 0 ? Math.abs(reach - expectedReach) / expectedReach : 0;
+  // The sketch has a standard error of about 0.8%, so 2.5% (three errors) only fails a real fault.
+  passed &&= reachError < 0.025;
+  results.push([
+    'Reach counted / expected',
+    `${reach.toLocaleString('en')} / ${Math.round(expectedReach).toLocaleString('en')} (${(reachError * 100).toFixed(2)}% off)`,
+  ]);
 
   // 2. Decision speed
   console.info(`Decisions: ${DECISION_RATE}/s for ${DECISION_DURATION}...`);

@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { AccountPage } from './account';
 import { AdminPage, MailboxPage } from './admin';
+import { AlertsPage } from './alerts';
 import { AudiencesPage } from './audiences';
 import { api, setExpiredHandler, type User } from './api';
+import { ComparePage } from './compare';
 import { ReviewPage } from './creatives';
 import {
   AcceptInvitation,
@@ -15,6 +17,7 @@ import {
 import { ROLE_NAMES } from './format';
 import { useTheme } from './hooks';
 import { CampaignPage, Overview } from './pages';
+import { ReportsPage } from './reports';
 import { ActivityPage, TeamPage } from './team';
 
 interface Route {
@@ -116,11 +119,19 @@ const App = () => {
   const hasOrganisation = user.organisationId !== null;
   const seesActivity = user.organisationRole === 'OWNER' || user.organisationRole === 'MANAGER';
   const campaignId = route.path.match(/^\/campaigns\/(.+)$/)?.[1];
+  const reportId = route.path.match(/^\/reports\/(.+)$/)?.[1];
 
   const page = (() => {
     if (campaignId) {
       return <CampaignPage key={campaignId} id={campaignId} user={user} onBack={() => go('/')} />;
     }
+    if (route.path === '/reports' || reportId) {
+      return (
+        <ReportsPage key={user.organisationId} user={user} {...(reportId ? { reportId } : {})} />
+      );
+    }
+    if (route.path === '/compare') return <ComparePage key={user.organisationId} />;
+    if (route.path === '/alerts') return <AlertsPage key={user.organisationId} />;
     if (route.path === '/team' && hasOrganisation && !isGuest) {
       return <TeamPage key={user.organisationId} user={user} onChanged={reloadUser} />;
     }
@@ -142,6 +153,9 @@ const App = () => {
 
   const links = [
     { path: '/', label: 'Overview', show: true },
+    { path: '/compare', label: 'Compare', show: true },
+    { path: '/reports', label: 'Reports', show: true },
+    { path: '/alerts', label: 'Alerts', show: true },
     { path: '/audiences', label: 'Audiences', show: hasOrganisation && !isGuest },
     { path: '/team', label: 'Team', show: hasOrganisation && !isGuest },
     { path: '/activity', label: 'Activity', show: seesActivity },
@@ -151,7 +165,9 @@ const App = () => {
   ].filter((link) => link.show);
 
   const isCurrent = (path: string): boolean =>
-    path === '/' ? route.path === '/' || Boolean(campaignId) : route.path === path;
+    path === '/'
+      ? route.path === '/' || Boolean(campaignId)
+      : route.path === path || (path === '/reports' && Boolean(reportId));
 
   return (
     <>

@@ -1,9 +1,11 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
+import { OpenAlerts } from './alerts';
 import { api, type Campaign, type User } from './api';
 import CampaignForm from './CampaignForm';
 import { CampaignAds } from './creatives';
 import {
   Breakdown,
+  DropOffBySegment,
   FilteredTraffic,
   ForecastComparison,
   Kpis,
@@ -13,7 +15,7 @@ import {
   StatusBadge,
   Trends,
   ViewerDropOff,
-  sumTotals,
+  countChange,
 } from './components';
 import {
   COUNTRY_LABELS,
@@ -26,7 +28,7 @@ import {
   formatNumber,
   formatPercent,
 } from './format';
-import { rangeFor, useLiveData } from './hooks';
+import { previousLabel, rangeFor, useLiveData } from './hooks';
 import { ErrorNote } from './ui';
 
 const CampaignTable = ({ campaigns, isAdmin }: { campaigns: Campaign[]; isAdmin: boolean }) => (
@@ -93,11 +95,13 @@ export const Overview = ({ user, onOpen }: { user: User; onOpen: (id: string) =>
 
   const { data, error, refresh } = useLiveData(async () => {
     const range = rangeFor(rangeId);
-    const [campaigns, points] = await Promise.all([api.analytics(range), api.timeseries(range)]);
-    return { campaigns, points };
+    const [campaigns, points, summary] = await Promise.all([
+      api.analytics(range),
+      api.timeseries(range),
+      api.summary(range),
+    ]);
+    return { campaigns, points, summary };
   }, rangeId);
-
-  const totals = useMemo(() => sumTotals(data?.campaigns ?? []), [data]);
 
   return (
     <>
@@ -122,7 +126,13 @@ export const Overview = ({ user, onOpen }: { user: User; onOpen: (id: string) =>
 
       {data ? (
         <>
-          <Kpis totals={totals} spendCents={totals.spendCents} />
+          <OpenAlerts />
+          <Kpis
+            totals={data.summary.current}
+            spendCents={data.summary.current.spendCents}
+            previous={data.summary.previous}
+            period={previousLabel(rangeId)}
+          />
           <Trends points={data.points} />
           {data.campaigns.length > 0 ? (
             <CampaignTable campaigns={data.campaigns} isAdmin={user.role === 'ADMIN'} />
@@ -271,15 +281,45 @@ export const CampaignPage = ({
             </div>
           </header>
 
-          <Kpis totals={campaign} spendCents={campaign.spendCents} />
+          <OpenAlerts campaignId={campaign.id} />
+          <Kpis
+            totals={campaign}
+            spendCents={campaign.spendCents}
+            previous={data.previous}
+            period={previousLabel(rangeId)}
+            extra={[
+              {
+                label: 'Reach',
+                value: formatCompact(data.reach),
+                change: countChange(data.reach, data.previous.reach),
+              },
+              {
+                label: 'Average frequency',
+                value: data.averageFrequency ? `${data.averageFrequency.toFixed(1)}×` : '–',
+                // Seeing an ad more often isn't good or bad in itself, so it isn't coloured.
+                change: countChange(data.averageFrequency, data.previous.averageFrequency, true),
+              },
+            ]}
+          />
+          <p className="muted small kpi-note">
+            Reach counts each viewer once over the days in this period. Average frequency is
+            impressions per viewer. Both are estimates, usually within 1 to 2%.
+          </p>
           <div className="columns">
             <Delivery campaign={campaign} />
             <Facts campaign={campaign} />
           </div>
-          <ForecastComparison campaign={campaign} reach={data.reach} />
+          <ForecastComparison campaign={campaign} reach={data.lifetimeReach} />
           <CampaignAds campaignId={campaign.id} canEdit={canEdit(user)} />
           <Trends points={data.timeseries} />
           <ViewerDropOff totals={campaign} />
+          <DropOffBySegment
+            groups={[
+              { id: 'slot', label: 'Ad slot', rows: data.breakdown.slot, labels: SLOT_LABELS },
+              { id: 'device', label: 'Device', rows: data.breakdown.device, labels: DEVICE_LABELS },
+              { id: 'show', label: 'Show', rows: data.breakdown.show },
+            ]}
+          />
           <FilteredTraffic rows={data.filtered} />
           <div className="columns">
             <Breakdown title="By ad slot" rows={data.breakdown.slot} labels={SLOT_LABELS} />

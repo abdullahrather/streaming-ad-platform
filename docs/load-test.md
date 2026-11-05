@@ -32,6 +32,19 @@ Five minutes at 10,000 events per second:
 | Failed requests | 0.000% |
 | Queue backlog when traffic stopped | None |
 
+### With reach counting
+
+Since reach for any period was added, every generated impression carries a viewer ID, drawn at random from a million viewers. Each one updates a lifetime and a daily HyperLogLog sketch. The same five minutes at 10,000 events per second:
+
+| Measure | Result |
+|---|---|
+| Events accepted and stored | 3,000,000, with **0 lost or double-counted** |
+| Event API response time | p95 4.4 ms, p99 5.9 ms |
+| Reach counted | 943,304 against 950,213 expected, **0.73% off** |
+| Failed requests | 0.000% |
+
+Counting reach adds about 0.8 ms at p95. The expected reach is exact: 3,000,000 random picks from a million viewers reach 1,000,000 × (1 − e⁻³) of them. The run fails if the count is more than 2.5% off.
+
 ## Worker crash
 
 The worker was killed with no warning 15 seconds into a 45-second run at 10,000 events per second, and a new one started 5 seconds later.

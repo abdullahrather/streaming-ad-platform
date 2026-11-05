@@ -22,6 +22,10 @@ Built with Node.js, TypeScript, Express, Prisma, PostgreSQL, Redis and FFmpeg, w
 |---|---|
 | ![The campaign form with its live forecast](./docs/images/campaign-form.png) | ![Two ads compared, with a confident winner](./docs/images/ab-test.png) |
 
+| Campaign comparison | Reports with CSV, PDF and email |
+|---|---|
+| ![Three campaigns compared side by side, with reach and frequency](./docs/images/compare.png) | ![A saved weekly report with its preview and email schedule](./docs/images/reports.png) |
+
 | Team management | Admin console |
 |---|---|
 | ![Team members, roles and invitations](./docs/images/team.png) | ![Users, organisations and platform activity](./docs/images/admin.png) |
@@ -72,7 +76,7 @@ This app is the part in the middle:
 
 The app includes demo traffic that plays the part of the viewers, so the numbers move while you watch. Run with `SIMULATE=0` to turn it off.
 
-**Things to try:** create a campaign targeting one country and watch it start delivering within seconds. Pause it and see the numbers stop. Compare Connected TV with Mobile on a campaign's page.
+**Things to try:** create a campaign targeting one country and watch it start delivering within seconds. Pause it and see the numbers stop. Compare Connected TV with Mobile on a campaign's page. Then open **Reports**, press **Send now** on the weekly summary, and find it in the local mailbox with its CSV and PDF attached.
 
 ### From upload to playback
 
@@ -119,6 +123,20 @@ Run with `SIMULATE=0` to turn off demo traffic, and the dashboard shows only wha
 
 These limits are checked in the same atomic step that reserves the ad, so they hold under concurrent traffic. See [how forecasts work](./docs/forecasting.md).
 
+### Reports and alerts
+
+| Feature | What it does |
+|---|---|
+| **Reach and frequency** | Counts different viewers for any period, and how often the average viewer saw the ad |
+| **Period comparison** | Every headline number shows its change against the previous period of the same length |
+| **Campaign comparison** | Puts two to four campaigns side by side, on one chart and one table |
+| **Drop-off** | Shows where viewers stop watching, by ad slot, device or show |
+| **Report builder** | Groups by day, campaign, slot, country, device or show, with chosen columns, and downloads as CSV or PDF |
+| **Scheduled reports** | Emails a saved report every day or week, with a summary, open alerts and both files attached |
+| **Alerts** | Watches for delivery falling behind, budget running out early and sudden drops, and emails once when one starts |
+
+The demo opens real alerts on its own data within seconds of starting: two campaigns are behind schedule. See [how reporting and alerts work](./docs/reporting.md), including why PostgreSQL is still enough.
+
 Viewing profiles exist only for viewers who consented. They expire after 90 days, and a viewer can delete theirs at any time.
 
 ### Accounts and teams
@@ -128,8 +146,8 @@ Each company is an organisation with its own private campaigns and team. A perso
 | Role | Can do |
 |---|---|
 | **Owner** | Everything below, plus invite people, change roles and remove members |
-| **Manager** | Create and change campaigns, and see team activity |
-| **Analyst** | View campaigns and reports |
+| **Manager** | Create and change campaigns, save and schedule reports, and see team activity |
+| **Analyst** | View campaigns, and run and download reports |
 
 The platform also has a **sign-up flow** with email confirmation, **password reset**, **two-factor login** with an authenticator app and recovery codes, a list of **signed-in devices**, an **activity log** of who changed what, and an **admin console** for suspending people or organisations.
 
@@ -192,6 +210,8 @@ Events go through a queue, so the API stays fast and a failure can't lose or rep
 - **Hourly rollups.** Events are added into one row per campaign, hour, show, slot, country and device, not stored one by one. The table grows with variety, not with traffic.
 - **Batched writes.** The worker turns thousands of events into a few upserts.
 - **One query per view.** Analytics run as a single SQL statement, so more campaigns never means more database round trips.
+- **Reach in 12 KB.** Unique viewers are counted in HyperLogLog sketches, one per campaign per day, instead of storing every viewer.
+- **Reports stay under a second.** A 90-day report over 9.9 million rollup rows takes about half a second. See [the measurements](./docs/reporting.md#why-postgresql-is-enough-for-now).
 
 ## API
 
@@ -229,10 +249,16 @@ Dashboard routes need `Authorization: Bearer <token>` from login. Ad server rout
 | `DELETE` | `/campaigns/:id` | Delete a campaign and its metrics |
 | `GET` | `/campaigns/analytics` | Totals, pacing and spend per campaign, with `from` and `to` |
 | `GET` | `/campaigns/analytics/timeseries` | Performance over time across campaigns |
-| `GET` | `/campaigns/:id/analytics` | One campaign with its trend and breakdowns |
+| `GET` | `/campaigns/analytics/summary` | Totals for a period and the period before it |
+| `GET` | `/campaigns/compare` | Two to four campaigns side by side, with `ids` |
+| `GET` | `/campaigns/:id/analytics` | One campaign with its trend, breakdowns, reach and frequency |
 | `POST` | `/campaigns/forecast` | Predict delivery and reach before launching |
 | `GET` | `/segments` | List audience segments |
 | `POST` | `/segments` | Create an audience segment |
+| `POST` | `/reports/run` | Run a report without saving it |
+| `POST` | `/reports/export` | Download a report as CSV or PDF, with `format` |
+| | `/reports/*` | Save, schedule, download and send saved reports |
+| `GET` | `/alerts` | Campaign alerts, with `status=open` or `all` |
 | `GET` | `/shows` | The show catalogue |
 | `GET` | `/ad-decision` | Choose an ad: `showId`, `slot`, `country`, `device` |
 | `POST` | `/events` | Queue a batch of ad events, each with an `eventId` and `occurredAt` |
@@ -243,8 +269,8 @@ Dashboard routes need `Authorization: Bearer <token>` from login. Ad server rout
 prisma/          Database schema, migrations and demo data
 scripts/         Local database and dev startup
 src/lib/         Storage, video conversion, email, security
-src/modules/     account, admin, audit, auth, campaigns, creatives, delivery, demo, dev, docs,
-                 playback, segments, shows, team
+src/modules/     account, admin, alerts, audit, auth, campaigns, creatives, delivery, demo, dev,
+                 docs, playback, reports, segments, shows, team
 src/middleware/  Sign-in and permission guards, API key guard, error handling
 tests/           Integration tests against a real PostgreSQL
 web/             The React dashboard, the demo streaming site and the player SDK
@@ -291,7 +317,8 @@ This is a working demonstration, not a system that has run under real load.
 - A reserved ad that never plays is only returned after its campaign has been quiet for two minutes, so a campaign near its limit can briefly under-deliver.
 - Dashboard totals lag slightly behind live traffic, because events pass through the queue first.
 - `/ad-decision` and `/events` share one API key, which suits a trusted ad server.
-- Sign-ups and invitations need `SMTP_URL` for real email; without it, messages stay in the local mailbox.
+- Sign-ups, invitations, reports and alerts need `SMTP_URL` for real email; without it, messages stay in the local mailbox.
+- Reach is an estimate, usually within 1 to 2%, and alert thresholds are the same for every campaign. See [how reporting and alerts work](./docs/reporting.md#limits).
 
 ## Contributing
 

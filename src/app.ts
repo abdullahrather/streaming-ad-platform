@@ -18,6 +18,7 @@ import morgan from 'morgan';
 
 import { accountRouter } from '@/modules/account/account.routes';
 import { adminRouter } from '@/modules/admin/admin.routes';
+import { alertsRouter } from '@/modules/alerts/alerts.routes';
 import { authRouter } from '@/modules/auth/auth.routes';
 import { campaignsRouter } from '@/modules/campaigns/campaigns.routes';
 import { creativesRouter, mediaRouter } from '@/modules/creatives/creatives.routes';
@@ -25,6 +26,7 @@ import { deliveryRouter } from '@/modules/delivery/delivery.routes';
 import { devRouter } from '@/modules/dev/dev.routes';
 import { docsRouter } from '@/modules/docs/docs.routes';
 import { playbackRouter } from '@/modules/playback/playback.routes';
+import { reportsRouter } from '@/modules/reports/reports.routes';
 import { segmentsRouter } from '@/modules/segments/segments.routes';
 import { showsRouter } from '@/modules/shows/shows.routes';
 import { invitationsRouter, teamRouter } from '@/modules/team/team.routes';
@@ -85,6 +87,8 @@ export function createApp(): Application {
   app.use(playbackRouter);
   app.use('/shows', showsRouter);
   app.use('/segments', segmentsRouter);
+  app.use('/reports', reportsRouter);
+  app.use('/alerts', alertsRouter);
   app.use(deliveryRouter);
 
   // ── Dashboard (when built) ────────────────────────────────────────────────
