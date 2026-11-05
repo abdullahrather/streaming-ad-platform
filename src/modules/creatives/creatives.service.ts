@@ -257,6 +257,11 @@ class CreativesService {
           sizeBytes: await storage.size(videoKey),
         },
       });
+      // With the AI assistant on, a quick look at the poster frame for the reviewer.
+      // Loaded lazily, since the assistant isn't needed when it's off.
+      void import('@/modules/ai/ai.service')
+        .then(({ aiService }) => aiService.checkAd(id))
+        .catch((error: unknown) => console.error(`AI check of ad ${id} failed:`, String(error)));
     } catch (error) {
       console.error(`Creative ${id} failed:`, String(error));
       await prisma.creative.updateMany({

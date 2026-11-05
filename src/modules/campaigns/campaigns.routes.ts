@@ -43,6 +43,10 @@ campaignsRouter.post('/', requireWriteAccess, (req, res, next) => {
   void campaignsController.create(req, res, next);
 });
 
+campaignsRouter.get('/:id/diagnosis', (req, res, next) => {
+  void campaignsController.diagnosis(req, res, next);
+});
+
 campaignsRouter.get('/:id/analytics', (req, res, next) => {
   void campaignsController.campaignAnalytics(req, res, next);
 });

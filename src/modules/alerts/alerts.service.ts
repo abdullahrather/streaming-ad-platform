@@ -182,16 +182,32 @@ const suddenDrop = async (
   };
 };
 
+/** With the AI assistant on, a short explanation goes with the alert. Loaded lazily, since the
+ * assistant's tools read alerts too. */
+const explain = async (alert: Alert, title: string): Promise<string | null> => {
+  const { aiService } = await import('@/modules/ai/ai.service');
+  const explanation = await aiService.explainAlert(alert, title);
+  if (explanation) {
+    const details = (alert.details ?? {}) as Prisma.JsonObject;
+    await prisma.alert.update({
+      where: { id: alert.id },
+      data: { details: { ...details, explanation } },
+    });
+  }
+  return explanation;
+};
+
 const notify = async (alert: Alert, title: string): Promise<void> => {
   const members = await prisma.membership.findMany({
     where: { organisationId: alert.organisationId, alertEmails: true, user: { suspendedAt: null } },
     include: { user: { select: { email: true } } },
   });
+  const explanation = await explain(alert, title).catch(() => null);
   for (const { user } of members) {
     await deliverEmail({
       to: user.email,
       subject: `Alert: ${title} – ${ALERT_LABELS[alert.type].toLowerCase()}`,
-      body: `${ALERT_LABELS[alert.type]} on “${title}”.\n\n${alert.message}\n\nYou get these emails because campaign alerts are on in your account settings.`,
+      body: `${ALERT_LABELS[alert.type]} on “${title}”.\n\n${alert.message}${explanation ? `\n\nWhy (written by the AI assistant from your data): ${explanation}` : ''}\n\nYou get these emails because campaign alerts are on in your account settings.`,
       link: `${env.APP_URL}/#/campaigns/${alert.campaignId}`,
     });
   }

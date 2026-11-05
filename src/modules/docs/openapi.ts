@@ -13,6 +13,8 @@ import {
   alertPreferenceSchema,
 } from '@/modules/account/account.routes';
 import { reportDefinitionSchema, saveReportSchema } from '@/modules/reports/reports.schema';
+import { draftSchema } from '@/modules/ai/ai.routes';
+import { askSchema } from '@/modules/ai/ai.service';
 import { suspendSchema } from '@/modules/admin/admin.routes';
 import {
   reviewSchema,
@@ -127,6 +129,11 @@ export const openApiDocument = {
     { name: 'Analytics', description: 'Measuring performance' },
     { name: 'Reports', description: 'Custom reports, CSV and PDF export, and scheduled emails' },
     { name: 'Alerts', description: 'Under-delivery, budget burn and sudden drops' },
+    {
+      name: 'AI assistant',
+      description:
+        'Optional. On when the platform owner sets AI_PROVIDER (and a key where needed). Reads only what the signed-in user can see; changes need a person to approve them.',
+    },
     { name: 'Catalogue', description: 'Shows that ads can run against' },
     { name: 'Creatives', description: 'Video ads and their review' },
     { name: 'Audiences', description: 'Segments built from viewing interests' },
@@ -493,6 +500,16 @@ export const openApiDocument = {
         responses: responses('200', 'Totals, reach and trend per campaign', '401', '404', '422'),
       },
     },
+    '/campaigns/{id}/diagnosis': {
+      get: {
+        ...dashboard('Analytics'),
+        summary: 'Why a campaign is behind, and whether it will reach its goal',
+        description:
+          "Computed from the campaign's data with no AI: the binding limit (matching traffic, budget, daily limits, frequency cap), blockers such as being paused or having no approved ad, and the outlook at the recent pace.",
+        parameters: [campaignId],
+        responses: responses('200', 'The diagnosis', '401', '404'),
+      },
+    },
     '/campaigns/{id}': {
       get: {
         ...dashboard('Campaigns'),
@@ -660,6 +677,92 @@ export const openApiDocument = {
         description: 'Alerts open and resolve on their own as campaigns are checked.',
         parameters: [query('status', 'open or all'), query('campaignId', 'Only this campaign')],
         responses: responses('200', 'Alerts', '401', '422'),
+      },
+    },
+    '/ai/status': {
+      get: {
+        ...dashboard('AI assistant'),
+        summary: 'Whether the AI assistant is on, and which provider and model it uses',
+        responses: responses('200', 'Status, with the reason when it is off', '401'),
+      },
+    },
+    '/ai/ask': {
+      post: {
+        ...dashboard('AI assistant'),
+        summary: 'Ask a question about your campaigns in plain language',
+        description:
+          'Answers come from read-only tools scoped to what you can see. Rate limited per person.',
+        requestBody: jsonBody(askSchema),
+        responses: responses(
+          '200',
+          'The answer and the tools it used',
+          '401',
+          '422',
+          '429',
+          '502',
+          '503',
+        ),
+      },
+    },
+    '/ai/campaigns/{id}/recommendations': {
+      get: {
+        ...dashboard('AI assistant'),
+        summary: "A campaign's suggested changes and their status",
+        parameters: [campaignId],
+        responses: responses('200', 'Recommendations, newest first', '401', '404'),
+      },
+      post: {
+        ...dashboard('AI assistant'),
+        summary: 'Ask the assistant to suggest changes',
+        description:
+          'Owners and managers. Suggestions are stored as pending and change nothing until approved.',
+        parameters: [campaignId],
+        responses: responses(
+          '201',
+          'New pending recommendations',
+          '401',
+          '403',
+          '404',
+          '429',
+          '502',
+          '503',
+        ),
+      },
+    },
+    '/ai/recommendations/{id}/approve': {
+      post: {
+        ...dashboard('AI assistant'),
+        summary: 'Apply a suggested change',
+        description:
+          'Owners and managers. Refused if the campaign changed since the suggestion was made.',
+        parameters: [pathId('id', 'Recommendation ID')],
+        responses: responses('200', 'Applied', '401', '403', '404', '409', '422'),
+      },
+    },
+    '/ai/recommendations/{id}/reject': {
+      post: {
+        ...dashboard('AI assistant'),
+        summary: 'Turn down a suggested change',
+        parameters: [pathId('id', 'Recommendation ID')],
+        responses: responses('200', 'Rejected', '401', '403', '404', '409'),
+      },
+    },
+    '/ai/draft-campaign': {
+      post: {
+        ...dashboard('AI assistant'),
+        summary: 'Draft a campaign from a written brief',
+        description: 'Owners and managers. Returns campaign fields to review; nothing is saved.',
+        requestBody: jsonBody(draftSchema),
+        responses: responses(
+          '200',
+          'The draft and its assumptions',
+          '401',
+          '403',
+          '422',
+          '429',
+          '502',
+          '503',
+        ),
       },
     },
     '/player/profile': {
@@ -835,6 +938,8 @@ export const openApiDocument = {
       413: { description: 'The file is too large' },
       422: { description: 'The request failed validation' },
       429: { description: 'Too many attempts' },
+      502: { description: 'The AI model could not be reached' },
+      503: { description: 'The AI assistant is not turned on' },
     },
   },
 };
