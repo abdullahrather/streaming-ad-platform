@@ -28,6 +28,11 @@ process.env['RUN_SCHEDULER'] = 'false';
 process.env['PLATFORM_TIMEZONE'] = 'Europe/Berlin';
 process.env['DECISION_CACHE_MS'] = '0';
 process.env['MIN_COMPLETION_RATIO'] = '0';
+// The runner's own AI settings never apply to tests.
+process.env['AI_PROVIDER'] = '';
+process.env['AI_API_KEY'] = '';
+process.env['AI_MODEL'] = '';
+process.env['AI_BASE_URL'] = '';
 process.env['MAX_ADS_PER_VIEWER_MINUTE'] = '20';
 process.env['PLAYER_RATE_LIMIT'] = '100000';
 process.env['MEDIA_DIR'] = path.join(os.tmpdir(), 'streaming-ad-platform-test-media');

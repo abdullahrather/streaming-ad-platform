@@ -14,6 +14,7 @@ import {
 } from '@/modules/account/account.routes';
 import { reportDefinitionSchema, saveReportSchema } from '@/modules/reports/reports.schema';
 import { draftSchema } from '@/modules/ai/ai.routes';
+import { aiSettingsSchema, pullSchema } from '@/modules/ai/ai.settings';
 import { askSchema } from '@/modules/ai/ai.service';
 import { suspendSchema } from '@/modules/admin/admin.routes';
 import {
@@ -763,6 +764,69 @@ export const openApiDocument = {
           '502',
           '503',
         ),
+      },
+    },
+    '/ai/settings': {
+      get: {
+        ...dashboard('AI assistant'),
+        summary: 'The assistant’s saved settings',
+        description:
+          'Platform admins. The key is never returned, only its last four characters. `lockedByEnv` is true when AI_PROVIDER in .env decides instead.',
+        responses: responses('200', 'The settings and current status', '401', '403'),
+      },
+      put: {
+        ...dashboard('AI assistant'),
+        summary: 'Turn the assistant on or off, and choose its provider',
+        description:
+          'Platform admins. The key is stored encrypted. Leave `apiKey` empty to keep the saved key for the same provider. Refused when AI_PROVIDER is set in .env, and in the public demo.',
+        requestBody: jsonBody(aiSettingsSchema),
+        responses: responses('200', 'Saved', '401', '403', '409', '422'),
+      },
+    },
+    '/ai/settings/test': {
+      post: {
+        ...dashboard('AI assistant'),
+        summary: 'Check that settings work, before or after saving them',
+        description:
+          'Platform admins. Sends one tiny request and reports how long it took, or why it failed.',
+        requestBody: jsonBody(aiSettingsSchema),
+        responses: responses(
+          '200',
+          'Whether it worked, with a message',
+          '401',
+          '403',
+          '422',
+          '429',
+        ),
+      },
+    },
+    '/ai/local/status': {
+      get: {
+        ...dashboard('AI assistant'),
+        summary: 'Whether Ollama is running, and which models it has',
+        parameters: [query('baseUrl', 'Ollama’s address. Defaults to http://localhost:11434/v1')],
+        responses: responses('200', 'Ollama’s status and models', '401', '403'),
+      },
+    },
+    '/ai/local/pull': {
+      get: {
+        ...dashboard('AI assistant'),
+        summary: 'Progress of a model download',
+        parameters: [query('model', 'The model being downloaded', true)],
+        responses: responses(
+          '200',
+          'Bytes done of total, or null if none was started',
+          '401',
+          '403',
+        ),
+      },
+      post: {
+        ...dashboard('AI assistant'),
+        summary: 'Download a model through Ollama',
+        description:
+          'Platform admins. Starts the download and returns at once; read progress with GET.',
+        requestBody: jsonBody(pullSchema),
+        responses: responses('202', 'Started', '401', '403', '409', '422'),
       },
     },
     '/player/profile': {

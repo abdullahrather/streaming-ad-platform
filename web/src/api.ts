@@ -195,6 +195,50 @@ export interface AiStatus {
   provider: string;
   model: string;
   reason: string;
+  source: 'env' | 'dashboard' | '';
+}
+
+export type AiProviderName = 'anthropic' | 'openai' | 'local';
+
+export interface AiSettingsInput {
+  enabled: boolean;
+  provider: AiProviderName;
+  model: string;
+  baseUrl: string;
+  /** Empty keeps the saved key for the same provider. */
+  apiKey: string;
+}
+
+export interface AiSettings {
+  enabled: boolean;
+  provider: AiProviderName | '';
+  model: string;
+  baseUrl: string;
+  keyHint: string;
+  lockedByEnv: boolean;
+  updatedAt: string | null;
+  status: AiStatus;
+}
+
+export interface AiTestResult {
+  ok: boolean;
+  latencyMs: number;
+  message: string;
+}
+
+export interface LocalAiStatus {
+  running: boolean;
+  version: string;
+  models: Array<{ name: string; sizeBytes: number }>;
+}
+
+export interface ModelDownload {
+  model: string;
+  status: string;
+  completed: number;
+  total: number;
+  done: boolean;
+  error: string;
 }
 
 export interface AiAnswer {
@@ -627,4 +671,14 @@ export const api = {
   decide: (id: string, decision: 'approve' | 'reject') =>
     post<Recommendation>(`/ai/recommendations/${id}/${decision}`),
   draftCampaign: (brief: string) => post<CampaignDraft>('/ai/draft-campaign', { brief }),
+  aiSettings: () => request<AiSettings>('/ai/settings'),
+  saveAiSettings: (input: AiSettingsInput) =>
+    request<AiSettings>('/ai/settings', { method: 'PUT', body: JSON.stringify(input) }),
+  testAiSettings: (input: AiSettingsInput) => post<AiTestResult>('/ai/settings/test', input),
+  localAiStatus: (baseUrl: string) =>
+    request<LocalAiStatus>(withSearch('/ai/local/status', baseUrl ? { baseUrl } : {})),
+  downloadModel: (model: string, baseUrl: string) =>
+    post<ModelDownload>('/ai/local/pull', { model, baseUrl }),
+  modelDownload: (model: string) =>
+    request<ModelDownload | null>(withSearch('/ai/local/pull', { model })),
 };

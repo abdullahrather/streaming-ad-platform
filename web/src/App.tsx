@@ -133,7 +133,7 @@ const App = () => {
     }
     if (route.path === '/compare') return <ComparePage key={user.organisationId} />;
     if (route.path === '/alerts') return <AlertsPage key={user.organisationId} />;
-    if (route.path === '/assistant') return <AssistantPage key={user.organisationId} />;
+    if (route.path === '/assistant') return <AssistantPage key={user.organisationId} user={user} />;
     if (route.path === '/team' && hasOrganisation && !isGuest) {
       return <TeamPage key={user.organisationId} user={user} onChanged={reloadUser} />;
     }
