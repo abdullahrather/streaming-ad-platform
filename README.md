@@ -381,7 +381,7 @@ This is a working demonstration, not a system that has run under real load.
 - `/ad-decision` and `/events` share one API key, which suits a trusted ad server.
 - Sign-ups, invitations, reports and alerts need `SMTP_URL` for real email; without it, messages stay in the local mailbox.
 - Reach is an estimate, usually within 1 to 2%, and alert thresholds are the same for every campaign. See [how reporting and alerts work](./docs/reporting.md#limits).
-- Card payments were tested against a local stand-in for Stripe, not Stripe's own test mode, and the VAT rules cover a seller in Germany selling to businesses. See [the billing limits](./docs/billing.md#limits).
+- Card payments need the runner's own Stripe account; the webhook was only tested against a local stand-in. The VAT rules cover a seller in Germany selling to businesses. See [the billing limits](./docs/billing.md#limits).
 - The AI assistant was tested end to end with a small local model, which answers "why is this campaign behind?" correctly but makes poor suggestions and drafts. Claude was tested only against a stand-in server, not the live API. See [the AI assistant's limits](./docs/ai.md#limits).
 
 ## Contributing

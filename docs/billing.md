@@ -141,7 +141,7 @@ Adding credit, changing a plan and changing billing details are recorded in the 
 
 ## Limits
 
-- **Card payments were tested against a local stand-in for Stripe,** not against Stripe's real test mode, which needs the runner's own account.
+- **Card payments need the runner's own Stripe account.** They were tested end to end in Stripe's real test mode, with test cards for a successful and a declined payment. The webhook was tested only against a local stand-in, because Stripe can't reach a laptop without a tunnel. Payments were credited by the check on return instead.
 - **The VAT rules cover one seller in Germany selling to businesses.** There's no VAT for consumers in other EU countries (OSS), because advertisers are businesses.
 - **One invoice per campaign, at the end.** A long campaign isn't invoiced monthly.
 - **Exchange rates come from the ECB** and are only as fresh as its last working-day publication.
