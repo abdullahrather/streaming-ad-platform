@@ -40,6 +40,7 @@ export async function clearDatabase(): Promise<void> {
   await testPrisma.auditLog.deleteMany();
   await testPrisma.capturedEmail.deleteMany();
   await testPrisma.aiSetting.deleteMany();
+  await testPrisma.invoiceSequence.deleteMany();
 }
 
 /** Creates a test user with a known password and returns the record + plaintext password */
@@ -49,6 +50,8 @@ export async function createTestUser(
     password: string;
     role: Role;
     organisationRole: OrganisationRole;
+    /** Prepaid credit for the new organisation. Plenty by default, so billing stays out of the way. */
+    creditCents: number;
   }> = {},
 ): Promise<{
   id: string;
@@ -69,7 +72,22 @@ export async function createTestUser(
       memberships: {
         create: {
           role: overrides.organisationRole ?? OrganisationRole.OWNER,
-          organisation: { create: { name: 'Test Organisation' } },
+          organisation: {
+            create: {
+              name: 'Test Organisation',
+              ...(overrides.creditCents === 0
+                ? {}
+                : {
+                    balanceEntries: {
+                      create: {
+                        kind: 'CREDIT',
+                        amountCents: overrides.creditCents ?? 1_000_000_000,
+                        description: 'Test credit',
+                      },
+                    },
+                  }),
+            },
+          },
         },
       },
     },

@@ -11,6 +11,7 @@ import { Prisma, type Campaign } from '@prisma/client';
 import { seesAllOrganisations, type Actor } from '@/lib/actor';
 import { prisma } from '@/lib/prisma';
 import { AppError } from '@/middleware/errorHandler';
+import { billingService } from '@/modules/billing/billing.service';
 import { decisionCache } from '@/modules/delivery/decision-cache';
 import { DAILY_TARGET_ERROR, hasDailyTarget } from './campaigns.schema';
 import { forecastCampaign } from './forecast.service';
@@ -203,14 +204,21 @@ export class CampaignsService {
     await this.assertOwnSegments(actor.organisationId, dto.targetSegmentIds);
 
     const forecast = await forecastCampaign(dto);
-    const created = await prisma.campaign.create({
-      data: {
-        ...dto,
-        userId: actor.sub,
-        organisationId: actor.organisationId,
-        forecastImpressions: forecast.expectedImpressions,
-        forecastReach: forecast.expectedReach,
-      },
+    const organisationId = actor.organisationId;
+    const created = await prisma.$transaction(async (tx) => {
+      // A running campaign holds its budget against the prepaid balance.
+      if (dto.status === 'ACTIVE') {
+        await billingService.assertAffordable(tx, organisationId, null, dto.budgetCents);
+      }
+      return tx.campaign.create({
+        data: {
+          ...dto,
+          userId: actor.sub,
+          organisationId,
+          forecastImpressions: forecast.expectedImpressions,
+          forecastReach: forecast.expectedReach,
+        },
+      });
     });
     decisionCache.invalidate();
     return created;
@@ -248,9 +256,22 @@ export class CampaignsService {
     };
     if (!hasDailyTarget(pacing)) throw new AppError(422, DAILY_TARGET_ERROR.error);
 
-    const updated = await prisma.campaign.update({
-      where: { id },
-      data: definedOnly(dto) as Prisma.CampaignUpdateInput,
+    // Starting, resuming or raising the budget needs the money to be available.
+    const status = dto.status ?? campaign.status;
+    const budgetCents = dto.budgetCents ?? campaign.budgetCents;
+    const holdsMore =
+      status === 'ACTIVE' &&
+      !campaign.billedAt &&
+      (campaign.status !== 'ACTIVE' || budgetCents > campaign.budgetCents);
+
+    const updated = await prisma.$transaction(async (tx) => {
+      if (holdsMore) {
+        await billingService.assertAffordable(tx, campaign.organisationId, id, budgetCents);
+      }
+      return tx.campaign.update({
+        where: { id },
+        data: definedOnly(dto) as Prisma.CampaignUpdateInput,
+      });
     });
     decisionCache.invalidate();
     return updated;
@@ -258,6 +279,8 @@ export class CampaignsService {
 
   async deleteCampaign(id: string, actor: Actor): Promise<Campaign> {
     await this.findOneOrFail(id, actor);
+    // Its delivery data goes with it, so whatever it spent is invoiced first.
+    await billingService.issueInvoice(id);
     const deleted = await prisma.campaign.delete({ where: { id } });
     decisionCache.invalidate();
     return deleted;

@@ -153,6 +153,8 @@ model Organisation {
   reports         Report[]
   alerts          Alert[]
   recommendations AiRecommendation[]
+  balanceEntries  BalanceEntry[]
+  invoices        Invoice[]
 
   @@map("organisations")
 }
@@ -309,6 +311,10 @@ model Campaign {
   /// What was predicted when the campaign was created.
   forecastImpressions   Int?           @map("forecast_impressions")
   forecastReach         Int?           @map("forecast_reach")
+  /// When it reached its goal or budget. A campaign that simply ran out of time ends at endsAt.
+  completedAt           DateTime?      @map("completed_at") @db.Timestamptz(3)
+  /// When its final invoice was issued, or when it closed with nothing to bill.
+  billedAt              DateTime?      @map("billed_at") @db.Timestamptz(3)
   createdAt             DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt             DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
 
@@ -318,6 +324,7 @@ model Campaign {
   creatives       Creative[]
   alerts          Alert[]
   recommendations AiRecommendation[]
+  invoices        Invoice[]
 
   @@index([organisationId])
   @@index([userId])
@@ -552,4 +559,69 @@ model AiSetting {
   updatedAt   DateTime @updatedAt @map("updated_at")
 
   @@map("ai_settings")
+}
+
+enum BalanceEntryKind {
+  CREDIT
+  CHARGE
+}
+
+/// The prepaid balance, as an append-only ledger. The balance is the sum of amountCents:
+/// credits are positive, charges negative. Rows are never edited.
+model BalanceEntry {
+  id             String           @id @default(cuid())
+  organisationId String           @map("organisation_id")
+  kind           BalanceEntryKind
+  amountCents    Int              @map("amount_cents")
+  description    String
+  /// The invoice a charge pays. One charge per invoice.
+  invoiceId      String?          @unique @map("invoice_id")
+  createdById    String?          @map("created_by_id")
+  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  // Checked at the end of the statement, so deleting an organisation removes both.
+  invoice      Invoice?     @relation(fields: [invoiceId], references: [id], onDelete: NoAction)
+
+  @@index([organisationId, createdAt])
+  @@map("balance_entries")
+}
+
+/// One per campaign, issued once its delivery is final. Names and amounts are copied in,
+/// so an invoice reads the same after the campaign is renamed or deleted.
+model Invoice {
+  id               String   @id @default(cuid())
+  /// INV-2026-00001: numbered in order within each year, with no gaps.
+  number           String   @unique
+  organisationId   String   @map("organisation_id")
+  campaignId       String?  @unique @map("campaign_id")
+  organisationName String   @map("organisation_name")
+  campaignTitle    String   @map("campaign_title")
+  advertiser       String
+  periodStart      DateTime @map("period_start") @db.Timestamptz(3)
+  periodEnd        DateTime @map("period_end") @db.Timestamptz(3)
+  impressions      Int
+  clicks           Int
+  /// Events removed as invalid traffic. Never billed.
+  filteredEvents   Int      @map("filtered_events")
+  subtotalCents    Int      @map("subtotal_cents")
+  taxCents         Int      @default(0) @map("tax_cents")
+  totalCents       Int      @map("total_cents")
+  currency         String   @default("EUR") @db.Char(3)
+  issuedAt         DateTime @default(now()) @map("issued_at") @db.Timestamptz(3)
+
+  organisation Organisation  @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  campaign     Campaign?     @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  charge       BalanceEntry?
+
+  @@index([organisationId, issuedAt])
+  @@map("invoices")
+}
+
+/// The last invoice number used in each year, so numbers have no gaps.
+model InvoiceSequence {
+  year Int @id
+  last Int
+
+  @@map("invoice_sequences")
 }

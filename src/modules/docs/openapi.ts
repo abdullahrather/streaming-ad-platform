@@ -15,6 +15,7 @@ import {
 import { reportDefinitionSchema, saveReportSchema } from '@/modules/reports/reports.schema';
 import { draftSchema } from '@/modules/ai/ai.routes';
 import { aiSettingsSchema, pullSchema } from '@/modules/ai/ai.settings';
+import { creditSchema } from '@/modules/billing/billing.service';
 import { askSchema } from '@/modules/ai/ai.service';
 import { suspendSchema } from '@/modules/admin/admin.routes';
 import {
@@ -133,7 +134,12 @@ export const openApiDocument = {
     {
       name: 'AI assistant',
       description:
-        'Optional. On when the platform owner sets AI_PROVIDER (and a key where needed). Reads only what the signed-in user can see; changes need a person to approve them.',
+        'Optional. A platform admin turns it on from the dashboard, or AI_PROVIDER is set in .env. Reads only what the signed-in user can see; changes need a person to approve them.',
+    },
+    {
+      name: 'Billing',
+      description:
+        'Prepaid balances. A running campaign holds its unspent budget against the balance; a finished campaign gets one invoice, paid from it.',
     },
     { name: 'Catalogue', description: 'Shows that ads can run against' },
     { name: 'Creatives', description: 'Video ads and their review' },
@@ -464,7 +470,7 @@ export const openApiDocument = {
         ...dashboard('Campaigns'),
         summary: 'Create a campaign',
         requestBody: jsonBody(createCampaignSchema),
-        responses: responses('201', 'Created', '401', '403', '422'),
+        responses: responses('201', 'Created', '401', '402', '403', '422'),
       },
     },
     '/campaigns/analytics': {
@@ -523,7 +529,7 @@ export const openApiDocument = {
         summary: 'Change a campaign, including pausing and resuming',
         parameters: [campaignId],
         requestBody: jsonBody(updateCampaignSchema),
-        responses: responses('200', 'Updated', '401', '403', '404', '409', '422'),
+        responses: responses('200', 'Updated', '401', '402', '403', '404', '409', '422'),
       },
       delete: {
         ...dashboard('Campaigns'),
@@ -766,6 +772,60 @@ export const openApiDocument = {
         ),
       },
     },
+    '/billing': {
+      get: {
+        ...dashboard('Billing'),
+        summary: 'Your organisation’s balance, what running campaigns hold, history and invoices',
+        description: 'Owners and managers.',
+        responses: responses('200', 'Balance, holds, entries and invoices', '401', '403'),
+      },
+    },
+    '/billing/invoices/{id}/pdf': {
+      get: {
+        ...dashboard('Billing'),
+        summary: 'Download an invoice as a PDF',
+        description: 'Owners and managers of the invoice’s organisation, and platform admins.',
+        parameters: [pathId('id', 'Invoice ID')],
+        responses: responses('200', 'The PDF', '401', '404'),
+      },
+    },
+    '/billing/organisations': {
+      get: {
+        ...dashboard('Billing'),
+        summary: 'Every organisation’s balance',
+        description: 'Platform admins.',
+        responses: responses(
+          '200',
+          'Organisations with balance, holds and invoice count',
+          '401',
+          '403',
+        ),
+      },
+    },
+    '/billing/organisations/{id}/credits': {
+      post: {
+        ...dashboard('Billing'),
+        summary: 'Add credit to an organisation’s balance',
+        description:
+          'Platform admins, such as when a bank transfer arrives. Recorded in the activity log.',
+        parameters: [pathId('id', 'Organisation ID')],
+        requestBody: jsonBody(creditSchema),
+        responses: responses('201', 'The new ledger entry', '401', '403', '404', '422'),
+      },
+    },
+    '/billing/revenue': {
+      get: {
+        ...dashboard('Billing'),
+        summary: 'What the platform earned as the publisher',
+        description:
+          'Platform admins. Delivered revenue in a period by show, advertiser and ad slot, with what was invoiced, credit paid in, and revenue not yet invoiced.',
+        parameters: [
+          query('from', 'Start, ISO date. Defaults to 7 days ago'),
+          query('to', 'End, ISO date. Defaults to now'),
+        ],
+        responses: responses('200', 'Revenue and its breakdowns', '401', '403', '422'),
+      },
+    },
     '/ai/settings': {
       get: {
         ...dashboard('AI assistant'),
@@ -996,6 +1056,7 @@ export const openApiDocument = {
     responses: {
       400: { description: 'The link is invalid or has expired' },
       401: { description: 'Sign-in or API key required' },
+      402: { description: 'Not enough prepaid balance for the campaign’s budget' },
       403: { description: 'Your role or account does not allow this' },
       404: { description: 'Not found, or belongs to another advertiser' },
       409: { description: 'Not allowed in the current state' },

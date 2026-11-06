@@ -12,6 +12,7 @@ import { createApp } from '@/app';
 import { accountRouter } from '@/modules/account/account.routes';
 import { adminRouter } from '@/modules/admin/admin.routes';
 import { aiRouter } from '@/modules/ai/ai.routes';
+import { billingRouter } from '@/modules/billing/billing.routes';
 import { alertsRouter } from '@/modules/alerts/alerts.routes';
 import { authRouter } from '@/modules/auth/auth.routes';
 import { campaignsRouter } from '@/modules/campaigns/campaigns.routes';
@@ -615,6 +616,7 @@ describe('API docs', () => {
       ...routesOf(reportsRouter as never, '/reports'),
       ...routesOf(alertsRouter as never, '/alerts'),
       ...routesOf(aiRouter as never, '/ai'),
+      ...routesOf(billingRouter as never, '/billing'),
     ];
 
     expect(documented).toEqual(expect.arrayContaining(actual));

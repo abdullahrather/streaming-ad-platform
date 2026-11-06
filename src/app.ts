@@ -19,6 +19,7 @@ import morgan from 'morgan';
 import { accountRouter } from '@/modules/account/account.routes';
 import { adminRouter } from '@/modules/admin/admin.routes';
 import { aiRouter } from '@/modules/ai/ai.routes';
+import { billingRouter } from '@/modules/billing/billing.routes';
 import { alertsRouter } from '@/modules/alerts/alerts.routes';
 import { authRouter } from '@/modules/auth/auth.routes';
 import { campaignsRouter } from '@/modules/campaigns/campaigns.routes';
@@ -91,6 +92,7 @@ export function createApp(): Application {
   app.use('/reports', reportsRouter);
   app.use('/alerts', alertsRouter);
   app.use('/ai', aiRouter);
+  app.use('/billing', billingRouter);
   app.use(deliveryRouter);
 
   // ── Dashboard (when built) ────────────────────────────────────────────────
