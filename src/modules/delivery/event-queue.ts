@@ -19,10 +19,11 @@ import { createBlockingRedis, reachDay, redis } from '@/lib/redis';
 import type { EventType } from './delivery.schema';
 import { flushInventory } from './viewer-activity';
 import { logger } from '@/lib/logger';
-import { eventsIngested, eventsWritten, workerLastBatch } from '@/lib/metrics';
+import { eventsIngested, eventsWritten } from '@/lib/metrics';
 
 const STREAM = 'ad-events';
 const GROUP = 'rollup';
+const WORKER_HEARTBEAT = 'worker:last-batch';
 const READ_COUNT = 500;
 const BLOCK_MS = 1000;
 const STALE_ENTRY_MS = 30_000;
@@ -393,9 +394,10 @@ const processEntries = async (entries: StreamEntry[]): Promise<void> => {
     .pipeline()
     .xack(STREAM, GROUP, ...ids)
     .xdel(STREAM, ...ids)
+    // In Redis, so the API can report it even when the worker runs as its own process.
+    .set(WORKER_HEARTBEAT, String(Date.now()))
     .exec();
   eventsWritten.inc(written);
-  workerLastBatch.setToCurrentTime();
 };
 
 const runHousekeeping = async (force = false): Promise<void> => {
@@ -480,6 +482,12 @@ export const drainEvents = async (consumer = 'drain'): Promise<void> => {
 
 /** How many batches are waiting to reach the database. */
 export const queueDepth = (): Promise<number> => redis.xlen(STREAM);
+
+/** When any worker last wrote a batch, in seconds, or null before the first one. */
+export const workerLastBatch = async (): Promise<number | null> => {
+  const at = Number(await redis.get(WORKER_HEARTBEAT));
+  return at > 0 ? at / 1000 : null;
+};
 
 let running = false;
 

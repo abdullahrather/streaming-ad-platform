@@ -42,12 +42,6 @@ export const eventsWritten = new Counter({
   registers: [registry],
 });
 
-export const workerLastBatch = new Gauge({
-  name: 'event_worker_last_batch_timestamp_seconds',
-  help: 'When the event worker last wrote a batch',
-  registers: [registry],
-});
-
 export const invoicesIssued = new Counter({
   name: 'invoices_issued_total',
   help: 'Invoices issued for finished campaigns',
@@ -73,6 +67,8 @@ interface LiveChecks {
   queueDepth: () => Promise<number>;
   postgres: () => Promise<unknown>;
   redis: () => Promise<unknown>;
+  /** From Redis, so it's right wherever the worker runs. */
+  workerLastBatch: () => Promise<number | null>;
 }
 let checks: LiveChecks | null = null;
 export const setLiveChecks = (live: LiveChecks): void => {
@@ -92,6 +88,17 @@ new Gauge({
   async collect(): Promise<void> {
     if (!checks) return;
     this.set(await withTimeout(checks.queueDepth()).catch(() => -1));
+  },
+});
+
+new Gauge({
+  name: 'event_worker_last_batch_timestamp_seconds',
+  help: 'When any event worker last wrote a batch, read from Redis',
+  registers: [registry],
+  async collect(): Promise<void> {
+    if (!checks) return;
+    const at = await withTimeout(checks.workerLastBatch()).catch(() => null);
+    if (at !== null) this.set(at);
   },
 });
 

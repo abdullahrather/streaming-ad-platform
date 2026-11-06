@@ -15,7 +15,7 @@ import { env } from '@/config/env';
 import { setLiveChecks } from '@/lib/metrics';
 import { prisma } from '@/lib/prisma';
 import { redis } from '@/lib/redis';
-import { queueDepth } from '@/modules/delivery/event-queue';
+import { queueDepth, workerLastBatch } from '@/modules/delivery/event-queue';
 import { creativesService } from '@/modules/creatives/creatives.service';
 import { refreshAiSettings } from '@/modules/ai/ai.config';
 import { startScheduler } from '@/modules/alerts/scheduler';
@@ -38,6 +38,7 @@ const server = app.listen({ port: env.PORT, backlog: CONNECTION_BACKLOG }, () =>
     queueDepth,
     postgres: () => prisma.$queryRaw`SELECT 1`,
     redis: () => redis.ping(),
+    workerLastBatch,
   });
   if (env.RUN_EVENT_WORKER) startEventWorker();
   if (env.RUN_SCHEDULER) startScheduler();

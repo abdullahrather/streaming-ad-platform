@@ -14,6 +14,7 @@ import { Role } from '@prisma/client';
 import { createApp } from '@/app';
 import { env } from '@/config/env';
 import { setLiveChecks } from '@/lib/metrics';
+import { drainEvents, workerLastBatch } from '@/modules/delivery/event-queue';
 import {
   clearDatabase,
   createTestCampaign,
@@ -120,11 +121,46 @@ describe('Metrics', () => {
     ).toBe(1);
   });
 
+  it('reports the worker’s last batch even when the worker runs in another process', async () => {
+    const user = await createTestUser();
+    const show = await createTestShow();
+    const campaign = await createTestCampaign(user.id);
+    const event = {
+      slot: 'PRE_ROLL',
+      country: 'DE',
+      device: 'CTV',
+      showId: show.id,
+      campaignId: campaign.id,
+      type: 'IMPRESSION',
+      eventId: crypto.randomUUID(),
+      occurredAt: new Date().toISOString(),
+    };
+    await request(app)
+      .post('/events')
+      .set('x-ingest-key', INGEST_KEY)
+      .send({ events: [event] });
+    const before = Date.now() / 1000;
+
+    // The worker writes the batch; the API, here a separate reader, reports when.
+    await drainEvents();
+    setLiveChecks({
+      queueDepth: () => Promise.resolve(0),
+      postgres: () => Promise.resolve(1),
+      redis: () => Promise.resolve('PONG'),
+      workerLastBatch,
+    });
+
+    expect(
+      sample(await metrics(), 'event_worker_last_batch_timestamp_seconds'),
+    ).toBeGreaterThanOrEqual(Math.floor(before));
+  });
+
   it('checks Postgres, Redis and the queue each time it is read', async () => {
     setLiveChecks({
       queueDepth: () => Promise.resolve(42),
       postgres: () => Promise.resolve(1),
       redis: () => Promise.reject(new Error('connection refused')),
+      workerLastBatch: () => Promise.resolve(null),
     });
 
     const text = await metrics();
