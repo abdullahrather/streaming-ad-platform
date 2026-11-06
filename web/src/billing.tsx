@@ -4,9 +4,11 @@ import {
   api,
   type BillingOverview,
   type OrganisationAccount,
+  type PlanName,
   type RevenueRow,
   type User,
 } from './api';
+import { AddCredit, BillingDetailsForm, CheckoutReturn, PlanUsage } from './billing-account';
 import { RangePicker } from './components';
 import { SLOT_LABELS, formatDate, formatDateTime, formatMoney, formatNumber } from './format';
 import { rangeFor, useLiveData } from './hooks';
@@ -30,16 +32,36 @@ const Tiles = ({ items }: { items: Array<{ label: string; value: string; note?: 
 const signed = (cents: number): string =>
   cents < 0 ? `−${formatMoney(-cents)}` : `+${formatMoney(cents)}`;
 
-/** An organisation's own balance, holds, history and invoices. */
-const OwnBilling = ({ data }: { data: BillingOverview }) => (
+/** An organisation's own balance, holds, plan, details, history and invoices. */
+const OwnBilling = ({
+  data,
+  isOwner,
+  refresh,
+}: {
+  data: BillingOverview;
+  isOwner: boolean;
+  refresh: () => void;
+}) => (
   <>
+    <CheckoutReturn onCredited={refresh} />
     <Tiles
       items={[
-        { label: 'Balance', value: formatMoney(data.balanceCents) },
+        {
+          label: 'Balance',
+          value: formatMoney(data.balanceCents),
+          ...(data.rate
+            ? {
+                note: `About ${formatMoney(Math.round(data.balanceCents * data.rate.rate), data.rate.currency)}`,
+              }
+            : {}),
+        },
         {
           label: 'Held by running campaigns',
           value: formatMoney(data.heldCents),
-          note: 'Their unspent budgets',
+          note:
+            data.vatRateBp > 0
+              ? `Their unspent budgets plus ${data.vatRateBp / 100}% VAT`
+              : 'Their unspent budgets',
         },
         {
           label: 'Available',
@@ -87,6 +109,12 @@ const OwnBilling = ({ data }: { data: BillingOverview }) => (
       )}
     </section>
 
+    <div className="columns">
+      <AddCredit data={data} isOwner={isOwner} />
+      <PlanUsage data={data} />
+    </div>
+    <BillingDetailsForm details={data.details} isOwner={isOwner} onSaved={refresh} />
+
     <section className="card">
       <h2>Invoices</h2>
       {data.invoices.length === 0 ? (
@@ -127,7 +155,7 @@ const OwnBilling = ({ data }: { data: BillingOverview }) => (
                     {formatDate(invoice.periodStart)} – {formatDate(invoice.periodEnd)}
                   </td>
                   <td className="num">{formatNumber(invoice.impressions)}</td>
-                  <td className="num">{formatMoney(invoice.totalCents)}</td>
+                  <td className="num">{formatMoney(invoice.totalCents, invoice.currency)}</td>
                   <td>
                     <button
                       type="button"
@@ -189,6 +217,14 @@ const Organisations = () => {
   const [message, setMessage] = useState('');
   const [failure, setFailure] = useState('');
 
+  const changePlan = (id: string, plan: PlanName): void => {
+    setFailure('');
+    api
+      .setPlan(id, plan)
+      .then(refresh)
+      .catch((reason: unknown) => setFailure(errorText(reason)));
+  };
+
   const submit = (event: FormEvent): void => {
     event.preventDefault();
     setFailure('');
@@ -217,6 +253,7 @@ const Organisations = () => {
               <thead>
                 <tr>
                   <th scope="col">Organisation</th>
+                  <th scope="col">Plan</th>
                   <th scope="col" className="num">
                     Balance
                   </th>
@@ -234,7 +271,23 @@ const Organisations = () => {
               <tbody>
                 {data.map((row: OrganisationAccount) => (
                   <tr key={row.id}>
-                    <td>{row.name}</td>
+                    <td>
+                      {row.name}
+                      <div className="muted small">
+                        {[row.country, row.currency].filter(Boolean).join(' · ')}
+                      </div>
+                    </td>
+                    <td>
+                      <select
+                        aria-label={`Plan for ${row.name}`}
+                        value={row.plan}
+                        onChange={(event) => changePlan(row.id, event.target.value as PlanName)}
+                      >
+                        <option value="STARTER">Starter</option>
+                        <option value="GROWTH">Growth</option>
+                        <option value="ENTERPRISE">Enterprise</option>
+                      </select>
+                    </td>
                     <td className="num">{formatMoney(row.balanceCents)}</td>
                     <td className="num">{formatMoney(row.heldCents)}</td>
                     <td className="num">{formatMoney(row.availableCents)}</td>
@@ -384,12 +437,16 @@ const PublisherRevenue = () => {
   );
 };
 
-const OwnBillingPage = ({ organisationId }: { organisationId: string }) => {
-  const { data, error } = useLiveData(() => api.billing(), organisationId);
+const OwnBillingPage = ({ user }: { user: User }) => {
+  const { data, error, refresh } = useLiveData(() => api.billing(), user.organisationId ?? 'none');
   return (
     <>
       <ErrorNote message={error} />
-      {data ? <OwnBilling data={data} /> : !error && <p className="empty">Loading…</p>}
+      {data ? (
+        <OwnBilling data={data} isOwner={user.organisationRole === 'OWNER'} refresh={refresh} />
+      ) : (
+        !error && <p className="empty">Loading…</p>
+      )}
     </>
   );
 };
@@ -412,7 +469,7 @@ export const BillingPage = ({ user }: { user: User }) => (
         <PublisherRevenue />
       </>
     ) : (
-      <OwnBillingPage organisationId={user.organisationId ?? 'none'} />
+      <OwnBillingPage user={user} />
     )}
   </>
 );

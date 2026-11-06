@@ -55,6 +55,20 @@ const envSchema = z.object({
   DEMO_MODE: z.stringbool().default(false),
   SIMULATE_TRAFFIC: z.enum(['off', 'on-demand', 'always']).default('off'),
   TRUST_PROXY: z.coerce.number().int().nonnegative().default(0),
+
+  // Billing. Stripe is optional: without a key, admins add credit by hand.
+  STRIPE_SECRET_KEY: z.string().default(''),
+  STRIPE_WEBHOOK_SECRET: z.string().default(''),
+  // The seller printed on invoices. The defaults are fictional.
+  SELLER_NAME: z.string().default('Campaign Analytics GmbH'),
+  SELLER_ADDRESS: z.string().default('Beispielstraße 1, 10115 Berlin, Germany'),
+  SELLER_VAT_ID: z.string().default('DE000000000'),
+  // Free public services: daily euro exchange rates and EU VAT ID checks.
+  ECB_RATES_URL: z
+    .string()
+    .url()
+    .default('https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml'),
+  VIES_URL: z.string().url().default('https://ec.europa.eu/taxation_customs/vies/rest-api'),
 });
 
 const parsed = envSchema.safeParse(process.env);

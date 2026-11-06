@@ -12,6 +12,7 @@ import { seesAllOrganisations, type Actor } from '@/lib/actor';
 import { prisma } from '@/lib/prisma';
 import { AppError } from '@/middleware/errorHandler';
 import { billingService } from '@/modules/billing/billing.service';
+import { assertWithinPlan } from '@/modules/billing/plans';
 import { decisionCache } from '@/modules/delivery/decision-cache';
 import { DAILY_TARGET_ERROR, hasDailyTarget } from './campaigns.schema';
 import { forecastCampaign } from './forecast.service';
@@ -209,6 +210,8 @@ export class CampaignsService {
       // A running campaign holds its budget against the prepaid balance.
       if (dto.status === 'ACTIVE') {
         await billingService.assertAffordable(tx, organisationId, null, dto.budgetCents);
+        // Checked after the balance, whose lock makes two starts at once count in turn.
+        await assertWithinPlan(organisationId, 'runningCampaigns', tx);
       }
       return tx.campaign.create({
         data: {
@@ -267,6 +270,10 @@ export class CampaignsService {
     const updated = await prisma.$transaction(async (tx) => {
       if (holdsMore) {
         await billingService.assertAffordable(tx, campaign.organisationId, id, budgetCents);
+      }
+      // Resuming makes one more running campaign, which the plan may not allow.
+      if (status === 'ACTIVE' && campaign.status !== 'ACTIVE' && !campaign.billedAt) {
+        await assertWithinPlan(campaign.organisationId, 'runningCampaigns', tx);
       }
       return tx.campaign.update({
         where: { id },

@@ -14,7 +14,7 @@ import {
   AdSlot,
   Device,
 } from '@prisma/client';
-import type { Campaign, Prisma } from '@prisma/client';
+import type { Campaign, Plan, Prisma } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { redis } from '@/lib/redis';
 
@@ -41,6 +41,7 @@ export async function clearDatabase(): Promise<void> {
   await testPrisma.capturedEmail.deleteMany();
   await testPrisma.aiSetting.deleteMany();
   await testPrisma.invoiceSequence.deleteMany();
+  await testPrisma.exchangeRate.deleteMany();
 }
 
 /** Creates a test user with a known password and returns the record + plaintext password */
@@ -52,6 +53,8 @@ export async function createTestUser(
     organisationRole: OrganisationRole;
     /** Prepaid credit for the new organisation. Plenty by default, so billing stays out of the way. */
     creditCents: number;
+    /** No plan limits by default, so they stay out of the way. */
+    plan: Plan;
   }> = {},
 ): Promise<{
   id: string;
@@ -75,6 +78,7 @@ export async function createTestUser(
           organisation: {
             create: {
               name: 'Test Organisation',
+              plan: overrides.plan ?? 'ENTERPRISE',
               ...(overrides.creditCents === 0
                 ? {}
                 : {

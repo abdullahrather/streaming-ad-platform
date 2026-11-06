@@ -15,7 +15,8 @@ import {
 import { reportDefinitionSchema, saveReportSchema } from '@/modules/reports/reports.schema';
 import { draftSchema } from '@/modules/ai/ai.routes';
 import { aiSettingsSchema, pullSchema } from '@/modules/ai/ai.settings';
-import { creditSchema } from '@/modules/billing/billing.service';
+import { creditSchema, detailsSchema, planSchema } from '@/modules/billing/billing.service';
+import { checkoutSchema } from '@/modules/billing/stripe';
 import { askSchema } from '@/modules/ai/ai.service';
 import { suspendSchema } from '@/modules/admin/admin.routes';
 import {
@@ -811,6 +812,70 @@ export const openApiDocument = {
         parameters: [pathId('id', 'Organisation ID')],
         requestBody: jsonBody(creditSchema),
         responses: responses('201', 'The new ledger entry', '401', '403', '404', '422'),
+      },
+    },
+    '/billing/details': {
+      put: {
+        ...dashboard('Billing'),
+        summary: 'Change the billing details printed on invoices',
+        description:
+          'Owners. Name, address, country, VAT ID and the currency to pay and be invoiced in. They decide the VAT: German customers pay 19%, EU businesses with a VAT ID confirmed by VIES get the reverse charge, and customers outside the EU pay no German VAT.',
+        requestBody: jsonBody(detailsSchema),
+        responses: responses(
+          '200',
+          'The details, the VAT that applies, and the VAT ID check',
+          '401',
+          '403',
+          '422',
+          '503',
+        ),
+      },
+    },
+    '/billing/checkout': {
+      post: {
+        ...dashboard('Billing'),
+        summary: 'Start a card payment to add credit',
+        description:
+          'Owners. Needs STRIPE_SECRET_KEY. Returns the Stripe Checkout page to send the payer to. The amount is in the organisation’s currency.',
+        requestBody: jsonBody(checkoutSchema),
+        responses: responses('201', 'The payment page', '401', '403', '422', '503'),
+      },
+    },
+    '/billing/checkout/{id}/confirm': {
+      post: {
+        ...dashboard('Billing'),
+        summary: 'Check a card payment when the payer comes back',
+        description:
+          'Owners. Credits the balance once Stripe says it is paid, converted to euros at the day’s rate. Safe to call more than once, and works without a webhook.',
+        parameters: [pathId('id', 'Stripe Checkout Session ID')],
+        responses: responses(
+          '200',
+          'Whether it is paid, and the ledger entry',
+          '401',
+          '403',
+          '404',
+          '503',
+        ),
+      },
+    },
+    '/billing/stripe/webhook': {
+      post: {
+        tags: ['Billing'],
+        summary: 'Stripe webhook',
+        description:
+          'Called by Stripe, not by people. Needs STRIPE_WEBHOOK_SECRET. The Stripe-Signature header is checked against the raw body before anything is read. A paid Checkout Session is credited once, however often it arrives.',
+        responses: responses('200', 'Received', '400', '503'),
+      },
+    },
+    '/billing/organisations/{id}': {
+      patch: {
+        ...dashboard('Billing'),
+        summary: 'Change an organisation’s plan',
+        description:
+          'Platform admins. Starter allows 2 running campaigns, 3 members and 1 scheduled report; Growth 10 of each; Enterprise has no limits. Recorded in the activity log.',
+        parameters: [pathId('id', 'Organisation ID')],
+        requestBody: jsonBody(planSchema),
+        responses: responses('200', 'The new plan', '401', '403', '404', '422'),
       },
     },
     '/billing/revenue': {

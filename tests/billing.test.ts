@@ -97,14 +97,14 @@ describe('Prepaid balance', () => {
     expect(first.status).toBe(201);
     expect(second.status).toBe(402);
     expect(second.body.message).toBe(
-      'Not enough balance. This campaign needs €500.00 of its budget, and €400.00 is available. Add credit on the Billing page, or lower the budget.',
+      'Not enough balance. This campaign needs €595.00, its unspent budget plus 19% VAT, and €286.00 is available. Add credit on the Billing page, or lower the budget.',
     );
     // A paused campaign holds nothing, so it can be created.
     expect(paused.status).toBe(201);
     expect(billing.body.data).toMatchObject({
       balanceCents: 100_000,
-      heldCents: 60_000,
-      availableCents: 40_000,
+      heldCents: 71_400,
+      availableCents: 28_600,
     });
   });
 
@@ -137,9 +137,9 @@ describe('Prepaid balance', () => {
   });
 
   it('counts what a campaign already spent, and checks budget increases', async () => {
-    const user = await createTestUser({ creditCents: 70_000 });
+    const user = await createTestUser({ creditCents: 85_000 });
     const auth = await login(user);
-    // €1,000 budget with €400 spent holds €600.
+    // €1,000 budget with €400 spent holds €600 plus 19% VAT: €714. €850 covers that.
     const campaign = await createTestCampaign(user.id, { status: 'PAUSED', budgetCents: 100_000 });
     await delivered(campaign.id, 20_000, 40_000_000);
 
@@ -228,22 +228,24 @@ describe('Invoices', () => {
       advertiser: 'Nordkap Outdoor',
       impressions: 61_728,
       subtotalCents: 123_457,
-      totalCents: 123_457,
+      taxCents: 23_457,
+      eurTotalCents: 146_914,
+      totalCents: 146_914,
       currency: 'EUR',
     });
     const charge = await testPrisma.balanceEntry.findFirstOrThrow({ where: { kind: 'CHARGE' } });
-    expect(charge).toMatchObject({ amountCents: -123_457, invoiceId: invoice.id });
+    expect(charge).toMatchObject({ amountCents: -146_914, invoiceId: invoice.id });
     const closed = await testPrisma.campaign.findUniqueOrThrow({ where: { id: campaign.id } });
     expect(closed.status).toBe('COMPLETED');
     expect(closed.billedAt).not.toBeNull();
     const account = await billingService.account(campaign.organisationId);
-    expect(account).toMatchObject({ balanceCents: 500_000 - 123_457, heldCents: 0 });
+    expect(account).toMatchObject({ balanceCents: 500_000 - 146_914, heldCents: 0 });
 
     const email = await testPrisma.capturedEmail.findFirstOrThrow({
       where: { recipient: 'owner@example.com' },
     });
     expect(email.subject).toBe(`Invoice INV-${year}-00001: Spring Coats`);
-    expect(email.body).toContain('€1,234.57 for 61,728 impressions');
+    expect(email.body).toContain('€1,469.14 for 61,728 impressions');
     expect(JSON.stringify(email.attachments)).toContain(`INV-${year}-00001.pdf`);
   });
 
@@ -315,7 +317,7 @@ describe('Invoices', () => {
     expect(invoice).toMatchObject({
       campaignId: null,
       campaignTitle: 'Gone soon',
-      totalCents: 10_000,
+      totalCents: 11_900,
     });
   });
 

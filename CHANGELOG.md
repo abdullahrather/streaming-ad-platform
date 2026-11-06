@@ -6,6 +6,22 @@ The main changes in each version. Every release's full notes are on the [Release
 
 ### Added
 
+- Billing details for organisations, which decide the VAT: 19% for German customers, the reverse charge for EU businesses with a VAT ID confirmed by the EU's VIES service, and none outside the EU
+- Invoices in the organisation's own currency at the European Central Bank's daily rate, showing the rate, the euro amounts and the VAT in euros
+- Optional card payments through Stripe Checkout, credited once by webhook or when the payer comes back
+- Starter, Growth and Enterprise plans that limit running campaigns, team members and scheduled reports, set by platform admins
+- `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `SELLER_NAME`, `SELLER_ADDRESS`, `SELLER_VAT_ID`, `ECB_RATES_URL` and `VIES_URL` settings
+
+### Changed
+
+- Running campaigns hold their unspent budget plus VAT, since the balance pays the invoice total
+- Publisher revenue counts invoices as net amounts in euros
+- Organisations from before plans are on Growth
+
+## 1.9.0
+
+### Added
+
 - Prepaid balances: a ledger of credits and charges for each organisation, shown on a new Billing page for owners and managers
 - Running campaigns hold their unspent budget; starting, resuming or raising a budget needs that much available, and is refused with 402 otherwise
 - One invoice per campaign once its delivery is final, numbered with no gaps, paid from the balance, emailed to owners and downloadable as a PDF

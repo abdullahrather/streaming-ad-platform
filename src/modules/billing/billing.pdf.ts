@@ -2,17 +2,16 @@
  * src/modules/billing/billing.pdf.ts
  *
  * An invoice as a one-page PDF, built from the invoice row alone, so it reads the same
- * after the campaign is renamed or deleted.
+ * after the campaign is renamed or deleted, or the seller's details change.
  */
 import type { Invoice } from '@prisma/client';
 import PDFDocument from 'pdfkit';
 import { env } from '@/config/env';
 
-const SELLER = 'Campaign Analytics';
 const MARGIN = 50;
 
-const euros = (cents: number): string =>
-  `€${(cents / 100).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const money = (cents: number, currency: string): string =>
+  new Intl.NumberFormat('en-GB', { style: 'currency', currency }).format(cents / 100);
 
 const day = (date: Date): string =>
   new Intl.DateTimeFormat('en-GB', {
@@ -30,6 +29,8 @@ export const invoicePdf = (invoice: Invoice): Promise<Buffer> =>
     doc.on('end', () => resolve(Buffer.concat(chunks)));
     doc.on('error', reject);
 
+    const currency = invoice.currency;
+    const inEuros = currency === 'EUR';
     doc.info.Title = `Invoice ${invoice.number}`;
     const width = doc.page.width - MARGIN * 2;
 
@@ -37,15 +38,40 @@ export const invoicePdf = (invoice: Invoice): Promise<Buffer> =>
     doc.font('Helvetica').fontSize(10).fillColor('#555555');
     doc.text(`${invoice.number} · issued ${day(invoice.issuedAt)}`).moveDown(1.5);
 
+    // Seller and buyer, side by side, as they were when the invoice was issued.
+    const party = (title: string, lines: string[], x: number, top: number): number => {
+      doc
+        .fillColor('#000000')
+        .font('Helvetica-Bold')
+        .text(title, x, top, { width: width / 2 - 10 });
+      doc.font('Helvetica');
+      for (const line of lines.filter(Boolean)) doc.text(line, x, doc.y, { width: width / 2 - 10 });
+      return doc.y;
+    };
     const top = doc.y;
-    doc.fillColor('#000000').font('Helvetica-Bold').text('From', MARGIN, top);
-    doc.font('Helvetica').text(SELLER);
-    doc.font('Helvetica-Bold').text('Bill to', MARGIN + width / 2, top);
-    doc.font('Helvetica').text(invoice.organisationName, MARGIN + width / 2);
+    const left = party(
+      'From',
+      [
+        invoice.sellerName,
+        ...invoice.sellerAddress.split(', '),
+        invoice.sellerVatId ? `VAT ID ${invoice.sellerVatId}` : '',
+      ],
+      MARGIN,
+      top,
+    );
+    const right = party(
+      'Bill to',
+      [
+        invoice.organisationName,
+        ...invoice.buyerAddress.split('\n'),
+        invoice.buyerVatId ? `VAT ID ${invoice.buyerVatId}` : '',
+      ],
+      MARGIN + width / 2,
+      top,
+    );
     doc.x = MARGIN;
-    doc.moveDown(2);
+    doc.y = Math.max(left, right) + 24;
 
-    // One line: the campaign's delivered impressions at their average price.
     const columns = [
       { label: 'Description', x: MARGIN, width: width * 0.5, align: 'left' as const },
       {
@@ -90,8 +116,8 @@ export const invoicePdf = (invoice: Invoice): Promise<Buffer> =>
     row([
       `Video ad impressions: “${invoice.campaignTitle}” for ${invoice.advertiser}, ${day(invoice.periodStart)} to ${day(invoice.periodEnd)}`,
       invoice.impressions.toLocaleString('en-GB'),
-      euros(averageCpm),
-      euros(invoice.subtotalCents),
+      money(averageCpm, currency),
+      money(invoice.subtotalCents, currency),
     ]);
 
     doc
@@ -100,22 +126,27 @@ export const invoicePdf = (invoice: Invoice): Promise<Buffer> =>
       .strokeColor('#cccccc')
       .stroke();
     doc.moveDown(0.5);
-    if (invoice.taxCents > 0) {
-      row(['Subtotal', '', '', euros(invoice.subtotalCents)]);
-      row(['VAT', '', '', euros(invoice.taxCents)]);
-    }
-    row(['Total', '', '', euros(invoice.totalCents)], true);
+    row(['Net amount', '', '', money(invoice.subtotalCents, currency)]);
+    row([`VAT ${invoice.vatRateBp / 100}%`, '', '', money(invoice.taxCents, currency)]);
+    row(['Total', '', '', money(invoice.totalCents, currency)], true);
 
     doc.moveDown(1.5).font('Helvetica').fontSize(9).fillColor('#555555');
+    if (invoice.vatNote) doc.text(invoice.vatNote);
+    if (!inEuros) {
+      // The VAT must also be stated in euros, the currency of the country where it's due.
+      doc.text(
+        `Exchange rate: 1 EUR = ${Number(invoice.exchangeRate).toFixed(4)} ${currency}, the European Central Bank reference rate. ` +
+          `In euros: net ${money(invoice.eurSubtotalCents, 'EUR')}, VAT ${money(invoice.eurTaxCents, 'EUR')}, total ${money(invoice.eurTotalCents, 'EUR')}.`,
+      );
+    }
     doc.text(`Paid from your prepaid balance on ${day(invoice.issuedAt)}. Nothing more is due.`);
-    if (invoice.taxCents === 0) doc.text('Amounts are net.');
     doc.text(
       `Clicks: ${invoice.clicks.toLocaleString('en-GB')}. ` +
         (invoice.filteredEvents > 0
           ? `${invoice.filteredEvents.toLocaleString('en-GB')} events were removed as invalid traffic and not billed.`
           : 'No invalid traffic was removed.'),
     );
-    doc.text(`Dates in ${env.PLATFORM_TIMEZONE}. Amounts in ${invoice.currency}.`);
+    doc.text(`Dates in ${env.PLATFORM_TIMEZONE}.`);
 
     doc.end();
   });

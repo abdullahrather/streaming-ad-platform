@@ -19,7 +19,7 @@ import morgan from 'morgan';
 import { accountRouter } from '@/modules/account/account.routes';
 import { adminRouter } from '@/modules/admin/admin.routes';
 import { aiRouter } from '@/modules/ai/ai.routes';
-import { billingRouter } from '@/modules/billing/billing.routes';
+import { billingRouter, stripeWebhook } from '@/modules/billing/billing.routes';
 import { alertsRouter } from '@/modules/alerts/alerts.routes';
 import { authRouter } from '@/modules/auth/auth.routes';
 import { campaignsRouter } from '@/modules/campaigns/campaigns.routes';
@@ -55,6 +55,14 @@ export function createApp(): Application {
   app.use(cors({ origin: origins.length > 0 ? origins : false, credentials: true }));
 
   // ── Body parsing ──────────────────────────────────────────────────────────
+  // Stripe signs the raw body, so its webhook is read before the JSON parser.
+  app.post(
+    '/billing/stripe/webhook',
+    express.raw({ type: 'application/json', limit: '1mb' }),
+    (req, res) => {
+      void stripeWebhook(req, res);
+    },
+  );
   app.use(express.json({ limit: '1mb' }));
   app.use(cookieParser());
 
