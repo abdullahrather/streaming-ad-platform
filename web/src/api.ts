@@ -211,6 +211,27 @@ export interface BalanceAccount {
   heldCents: number;
   availableCents: number;
   reservations: Reservation[];
+  vatRateBp: number;
+}
+
+export type PlanName = 'STARTER' | 'GROWTH' | 'ENTERPRISE';
+export type PlanLimit = 'runningCampaigns' | 'members' | 'scheduledReports';
+
+export interface BillingDetailsInput {
+  billingName: string;
+  addressLine1: string;
+  addressLine2: string;
+  postalCode: string;
+  city: string;
+  country: string;
+  vatId: string;
+  currency: string;
+}
+
+export interface BillingDetails extends BillingDetailsInput {
+  vatIdVerified: boolean;
+  vat: { rateBp: number; note: string };
+  vatCheck?: 'valid' | 'invalid' | 'unavailable' | 'not needed';
 }
 
 export interface BalanceEntry {
@@ -232,18 +253,29 @@ export interface Invoice {
   impressions: number;
   totalCents: number;
   currency: string;
+  eurTotalCents: number;
+  vatRateBp: number;
   issuedAt: string;
 }
 
 export interface BillingOverview extends BalanceAccount {
   entries: BalanceEntry[];
   invoices: Invoice[];
+  details: BillingDetails;
+  plan: PlanName;
+  limits: Record<PlanLimit, number | null>;
+  usage: Record<PlanLimit, number>;
+  cardPayments: boolean;
+  rate: { currency: string; rate: number; date: string } | null;
 }
 
 export interface OrganisationAccount extends BalanceAccount {
   id: string;
   name: string;
   invoices: number;
+  plan: PlanName;
+  currency: string;
+  country: string;
 }
 
 export interface RevenueRow {
@@ -761,4 +793,16 @@ export const api = {
       description,
     }),
   revenue: (range: Range) => request<Revenue>(withRange('/billing/revenue', range)),
+  saveBillingDetails: (input: BillingDetailsInput) =>
+    request<BillingDetails>('/billing/details', { method: 'PUT', body: JSON.stringify(input) }),
+  checkout: (amountCents: number) => post<{ url: string }>('/billing/checkout', { amountCents }),
+  confirmCheckout: (sessionId: string) =>
+    post<{ paid: boolean; entry: BalanceEntry | null }>(
+      `/billing/checkout/${encodeURIComponent(sessionId)}/confirm`,
+    ),
+  setPlan: (organisationId: string, plan: PlanName) =>
+    request<{ plan: PlanName }>(`/billing/organisations/${organisationId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ plan }),
+    }),
 };

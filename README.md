@@ -34,6 +34,10 @@ Built with Node.js, TypeScript, Express, Prisma, PostgreSQL, Redis and FFmpeg, w
 |---|
 | ![Turning the assistant on from the dashboard, with the local Ollama found and its model chosen](./docs/images/ai-settings.png) |
 
+| Plans, card payments and billing details |
+|---|
+| ![Plan usage, adding credit, and billing details that decide the VAT and currency](./docs/images/billing-details.png) |
+
 | Prepaid billing | Publisher revenue |
 |---|---|
 | ![The balance, what running campaigns hold, and what is available](./docs/images/billing.png) | ![What the platform earned, by show and advertiser](./docs/images/revenue.png) |
@@ -178,8 +182,12 @@ Campaigns are paid from a prepaid balance, so the platform never delivers ads no
 | **Holds** | A running campaign holds its unspent budget. Starting, resuming or raising a budget needs that much to be available |
 | **Invoices** | Each campaign is invoiced once, for what it really cost, about an hour after it ends. Numbered with no gaps, paid from the balance, and emailed as a PDF |
 | **Publisher revenue** | What the platform earned from the ads it showed, by show, advertiser and ad slot, with eCPM |
+| **EU VAT** | 19% for German customers, the reverse charge for EU businesses whose VAT ID the EU's VIES service confirms, and none outside the EU |
+| **Currencies** | Each organisation pays and is invoiced in its own currency, at the European Central Bank's daily rate, while prices and the balance stay in euros |
+| **Card payments** | Optional, through Stripe Checkout with the runner's own account. Credited once, by webhook or when the payer comes back |
+| **Plans** | Starter, Growth and Enterprise limit running campaigns, team members and scheduled reports |
 
-Platform admins add credit, for example when a bank transfer arrives. Ad decisions never check the balance: budgets are already hard limits, and the balance covers every running budget. See [how billing works](./docs/billing.md).
+Platform admins add credit, for example when a bank transfer arrives, and set plans. Ad decisions never check the balance: budgets are already hard limits, and the balance covers every running budget. See [how billing works](./docs/billing.md).
 
 ### Accounts and teams
 
@@ -310,7 +318,9 @@ Dashboard routes need `Authorization: Bearer <token>` from login. Ad server rout
 | | `/ai/settings`, `/ai/local/*` | Admin settings: provider, key, connection test, Ollama models and downloads |
 | `GET` | `/billing` | Your balance, what running campaigns hold, history and invoices |
 | `GET` | `/billing/invoices/:id/pdf` | Download an invoice |
-| | `/billing/organisations`, `/billing/revenue` | Admin: every balance, adding credit, and publisher revenue |
+| `PUT` | `/billing/details` | Billing details: address, country, VAT ID and currency |
+| | `/billing/checkout`, `/billing/stripe/webhook` | Card payments through Stripe |
+| | `/billing/organisations`, `/billing/revenue` | Admin: every balance, adding credit, plans, and publisher revenue |
 | `GET` | `/shows` | The show catalogue |
 | `GET` | `/ad-decision` | Choose an ad: `showId`, `slot`, `country`, `device` |
 | `POST` | `/events` | Queue a batch of ad events, each with an `eventId` and `occurredAt` |
@@ -371,7 +381,7 @@ This is a working demonstration, not a system that has run under real load.
 - `/ad-decision` and `/events` share one API key, which suits a trusted ad server.
 - Sign-ups, invitations, reports and alerts need `SMTP_URL` for real email; without it, messages stay in the local mailbox.
 - Reach is an estimate, usually within 1 to 2%, and alert thresholds are the same for every campaign. See [how reporting and alerts work](./docs/reporting.md#limits).
-- Billing is prepaid and in euros only, with no VAT or online payment yet; admins add credit by hand. See [the billing limits](./docs/billing.md#limits).
+- Card payments were tested against a local stand-in for Stripe, not Stripe's own test mode, and the VAT rules cover a seller in Germany selling to businesses. See [the billing limits](./docs/billing.md#limits).
 - The AI assistant was tested end to end with a small local model, which answers "why is this campaign behind?" correctly but makes poor suggestions and drafts. Claude was tested only against a stand-in server, not the live API. See [the AI assistant's limits](./docs/ai.md#limits).
 
 ## Contributing
