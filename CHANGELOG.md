@@ -6,6 +6,20 @@ The main changes in each version. Every release's full notes are on the [Release
 
 ### Added
 
+- GDPR tools: viewers can download and delete everything held about them (`GET` and `DELETE /player/data`), and dashboard users can download their data and delete their account (`GET /account/export`, `DELETE /account`)
+- Retention limits, applied hourly: old sign-ins, links, invitations and captured emails are deleted after 30 days, IP addresses in the activity history are cleared after 90 days, and entries are deleted after two years
+- The dashboard in German, with a language picker; numbers, money and dates follow the language. A CI check fails on untranslated text
+- Browser tests with Playwright, run in CI against the built app
+- CodeQL scanning, a dependency review on pull requests, and `npm audit` for the dashboard
+
+### Changed
+
+- Withdrawing consent on the demo streaming site now deletes the viewer's interest profile
+
+## 1.11.0
+
+### Added
+
 - Structured JSON logs with a request ID on every line, linked to traces, and sent to Loki when `LOKI_URL` is set
 - Prometheus metrics at `/metrics`: request times by route, ad decisions, events and the queue, Postgres and Redis health, invoices, scheduled task failures, and backups
 - OpenTelemetry traces for HTTP, Express and Redis, sent to Tempo when `OTEL_EXPORTER_OTLP_ENDPOINT` is set

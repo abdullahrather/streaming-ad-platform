@@ -80,6 +80,82 @@ jobs:
       - run: npm run typecheck
       - run: npm run check:translations
       - run: npm run build
+      - run: npm audit --omit=dev --audit-level=high
+
+  dependencies:
+    name: Dependency review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Fails a pull request that adds a package with a known high-severity vulnerability.
+      - uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+
+  browser:
+    name: Browser tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: secret
+          POSTGRES_DB: campaign_analytics
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:8-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      NODE_ENV: development
+      REDIS_URL: redis://localhost:6379
+      DATABASE_URL: postgresql://postgres:secret@localhost:5432/campaign_analytics?schema=public
+      JWT_SECRET: ci-secret-that-is-at-least-32-characters-long
+      INGEST_API_KEY: ci-ingest-key-1234
+      ENCRYPTION_KEY: ci-encryption-key-that-is-at-least-32-chars
+      # Every test signs in, which would soon hit the sign-in limit for one address.
+      LOGIN_RATE_LIMIT: '1000'
+      SIMULATE_TRAFFIC: 'off'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            web/package-lock.json
+      - run: npm ci
+      - run: npm ci --prefix web
+      - run: npx prisma migrate deploy
+      - name: Seed the demo data
+        run: node node_modules/tsx/dist/cli.mjs prisma/seed.ts
+      - run: npm run build
+      - run: npm run build --prefix web
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+      - name: Keep the report and traces of a failed run
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
 
   docker:
     name: Docker
