@@ -39,6 +39,8 @@ import {
   vatPrefix,
   type VatTreatment,
 } from './vat';
+import { logger } from '@/lib/logger';
+import { invoicesIssued } from '@/lib/metrics';
 
 type Db = Prisma.TransactionClient | typeof prisma;
 
@@ -410,9 +412,10 @@ class BillingService {
     });
 
     decisionCache.invalidate();
+    if (invoice) invoicesIssued.inc();
     if (invoice)
       await this.sendInvoice(invoice).catch((error: unknown) =>
-        console.error(`Invoice email for ${invoice.number} failed:`, String(error)),
+        logger.error({ err: String(error) }, `Invoice email for ${invoice.number} failed`),
       );
     return invoice;
   }
@@ -425,7 +428,7 @@ class BillingService {
         if (await this.issueInvoice(id, now)) issued += 1;
       } catch (error) {
         // One campaign that can't be billed yet, such as for a missing rate, doesn't stop the rest.
-        console.error(`Invoicing campaign ${id} failed:`, String(error));
+        logger.error({ err: String(error) }, `Invoicing campaign ${id} failed`);
       }
     }
     return issued;

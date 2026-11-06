@@ -42,6 +42,10 @@ Built with Node.js, TypeScript, Express, Prisma, PostgreSQL, Redis and FFmpeg, w
 |---|---|
 | ![The balance, what running campaigns hold, and what is available](./docs/images/billing.png) | ![What the platform earned, by show and advertiser](./docs/images/revenue.png) |
 
+| Platform health in Grafana |
+|---|
+| ![Grafana dashboard: services up, backups, request times, ad breaks and events, with a Redis outage and recovery](./docs/images/grafana.png) |
+
 | Team management | Admin console |
 |---|---|
 | ![Team members, roles and invitations](./docs/images/team.png) | ![Users, organisations and platform activity](./docs/images/admin.png) |
@@ -253,6 +257,18 @@ Events go through a queue, so the API stays fast and a failure can't lose or rep
 - **A crash can't lose events.** An entry stays on the queue until its totals are saved. If a worker dies, another picks up its work.
 - **A crash can't count twice.** The queue entry's ID is saved in the same transaction as the totals, so an entry redelivered after a crash changes nothing.
 
+## Running it in production
+
+`npm run stack` starts the platform with its monitoring and backups in Docker: Grafana, Prometheus, Alertmanager, Loki for logs, Tempo for traces, and a backup service.
+
+- **Logs** are structured JSON with a request ID on every line, linked to their traces.
+- **Metrics** at `/metrics` cover request times by route, ad decisions, events and the queue, whether Postgres and Redis answer, and backups.
+- **Traces** follow each request through Express and Redis.
+- **Alerts** email the platform admins when something breaks, such as a database not answering, failing requests, ad breaks getting no ads, a stalled event worker, or a backup that's too old or won't restore. With Redis stopped, the alert email arrived in 97 seconds.
+- **Backups** are taken daily and restored into a scratch database to prove they work, checking every table's row count. CI runs the same restore drill on every pull request.
+
+See [the operations guide](./docs/operations.md).
+
 ## How it stays fast
 
 - **Decisions use no database.** Running campaigns are kept in memory and live delivery counts in Redis.
@@ -353,6 +369,10 @@ web/             The React dashboard, the demo streaming site and the player SDK
 | `npm run forecast:check` | Test forecast accuracy against held-out history |
 | `npm run db:seed` | Replace all data with fresh demo data |
 | `npm run db:studio` | Browse the database in Prisma Studio |
+| `npm run db:backup` | Back up the database |
+| `npm run db:restore-drill` | Back up, restore into a scratch database, and check every table |
+| `npm run db:restore` | Restore a backup, into another database or over the live one |
+| `npm run stack` | Run everything in Docker with monitoring and backups |
 
 ## Docker
 
@@ -361,6 +381,8 @@ With Docker installed, this runs the database and the app at **http://localhost:
 ```bash
 docker compose up --build
 ```
+
+To add monitoring and backups (Grafana at **http://localhost:3001**), run `npm run stack`. See [the operations guide](./docs/operations.md).
 
 For a real deployment, build the `production` image target and set `DATABASE_URL`, `JWT_SECRET` and `INGEST_API_KEY`. The app refuses to start in production with the placeholder secrets.
 
@@ -380,6 +402,7 @@ This is a working demonstration, not a system that has run under real load.
 - Dashboard totals lag slightly behind live traffic, because events pass through the queue first.
 - `/ad-decision` and `/events` share one API key, which suits a trusted ad server.
 - Sign-ups, invitations, reports and alerts need `SMTP_URL` for real email; without it, messages stay in the local mailbox.
+- Database queries aren't traced one by one, and the ApiDown alert can't be emailed through the API that's down. See [the operations guide](./docs/operations.md).
 - Reach is an estimate, usually within 1 to 2%, and alert thresholds are the same for every campaign. See [how reporting and alerts work](./docs/reporting.md#limits).
 - Card payments need the runner's own Stripe account; the webhook was only tested against a local stand-in. The VAT rules cover a seller in Germany selling to businesses. See [the billing limits](./docs/billing.md#limits).
 - The AI assistant was tested end to end with a small local model, which answers "why is this campaign behind?" correctly but makes poor suggestions and drafts. Claude was tested only against a stand-in server, not the live API. See [the AI assistant's limits](./docs/ai.md#limits).

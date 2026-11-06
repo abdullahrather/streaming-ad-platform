@@ -8,14 +8,20 @@
  *  b) The server startup concerns (port binding, graceful shutdown)
  *     are isolated in one place.
  */
+// First, so tracing is in place before the modules it records are loaded.
+import './tracing';
 import { createApp } from './app';
 import { env } from '@/config/env';
+import { setLiveChecks } from '@/lib/metrics';
 import { prisma } from '@/lib/prisma';
+import { redis } from '@/lib/redis';
+import { queueDepth, workerLastBatch } from '@/modules/delivery/event-queue';
 import { creativesService } from '@/modules/creatives/creatives.service';
 import { refreshAiSettings } from '@/modules/ai/ai.config';
 import { startScheduler } from '@/modules/alerts/scheduler';
 import { startEventWorker } from '@/modules/delivery/event-queue';
 import { startTraffic } from '@/modules/demo/traffic';
+import { logger } from '@/lib/logger';
 
 const app = createApp();
 
@@ -23,9 +29,17 @@ const app = createApp();
 const CONNECTION_BACKLOG = 4096;
 
 const server = app.listen({ port: env.PORT, backlog: CONNECTION_BACKLOG }, () => {
-  console.info(`🚀  Server running at http://localhost:${env.PORT}`);
-  console.info(`📋  Environment: ${env.NODE_ENV}`);
-  console.info(`🏥  Health check: http://localhost:${env.PORT}/health`);
+  logger.info(
+    { port: env.PORT, environment: env.NODE_ENV },
+    `Server running at http://localhost:${env.PORT}`,
+  );
+  // Checked each time Prometheus scrapes /metrics.
+  setLiveChecks({
+    queueDepth,
+    postgres: () => prisma.$queryRaw`SELECT 1`,
+    redis: () => redis.ping(),
+    workerLastBatch,
+  });
   if (env.RUN_EVENT_WORKER) startEventWorker();
   if (env.RUN_SCHEDULER) startScheduler();
   // Settings saved in the dashboard, read again so every API process sees a change.
@@ -34,7 +48,7 @@ const server = app.listen({ port: env.PORT, backlog: CONNECTION_BACKLOG }, () =>
   startTraffic();
   creativesService
     .resumeProcessing()
-    .catch((error: unknown) => console.error('Ad conversions:', String(error)));
+    .catch((error: unknown) => logger.error({ err: String(error) }, 'Ad conversions'));
 });
 
 // ── Graceful Shutdown ─────────────────────────────────────────────────────────
@@ -42,19 +56,19 @@ const server = app.listen({ port: env.PORT, backlog: CONNECTION_BACKLOG }, () =>
 // before the process exits. Essential for zero-downtime deployments.
 
 const shutdown = (signal: string): void => {
-  console.info(`\n📴  ${signal} received. Shutting down gracefully...`);
+  logger.info({ signal }, 'Shutting down');
 
   server.close(() => {
-    console.info('🔌  HTTP server closed.');
+    logger.info('HTTP server closed');
     void prisma.$disconnect().finally(() => {
-      console.info('🗄️   Database connection closed.');
+      logger.info('Database connection closed');
       process.exit(0);
     });
   });
 
   // Force exit if graceful shutdown takes too long
   setTimeout(() => {
-    console.error('❌  Forced shutdown after timeout.');
+    logger.error('Forced shutdown after timeout');
     process.exit(1);
   }, 10_000);
 };

@@ -6,6 +6,22 @@ The main changes in each version. Every release's full notes are on the [Release
 
 ### Added
 
+- Structured JSON logs with a request ID on every line, linked to traces, and sent to Loki when `LOKI_URL` is set
+- Prometheus metrics at `/metrics`: request times by route, ad decisions, events and the queue, Postgres and Redis health, invoices, scheduled task failures, and backups
+- OpenTelemetry traces for HTTP, Express and Redis, sent to Tempo when `OTEL_EXPORTER_OTLP_ENDPOINT` is set
+- Alert rules for outages, errors, slow requests, ad breaks without ads, the event worker and backups, emailed to platform admins through `/ops/alerts`
+- `npm run db:backup`, `db:restore` and `db:restore-drill`; the drill restores into a scratch database and checks every table's row count, and runs in CI
+- `npm run stack`: the platform with Grafana, Prometheus, Alertmanager, Loki, Tempo and daily backups in Docker
+- `LOG_LEVEL`, `LOKI_URL`, `METRICS_TOKEN`, `ALERT_WEBHOOK_TOKEN` and `BACKUP_DIR` settings
+
+### Fixed
+
+- The Docker stack's seed failed while making demo videos, because it tried to remove the mounted media folder, so the stack had no ads
+
+## 1.10.0
+
+### Added
+
 - Billing details for organisations, which decide the VAT: 19% for German customers, the reverse charge for EU businesses with a VAT ID confirmed by the EU's VIES service, and none outside the EU
 - Invoices in the organisation's own currency at the European Central Bank's daily rate, showing the rate, the euro amounts and the VAT in euros
 - Optional card payments through Stripe Checkout, credited once by webhook or when the payer comes back

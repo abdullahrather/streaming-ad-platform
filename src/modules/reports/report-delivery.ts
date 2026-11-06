@@ -13,6 +13,7 @@ import { aiProvider } from '@/modules/ai/ai.config';
 import { toCsv, toPdf, periodLabel } from './reports.export';
 import type { ReportColumn } from './reports.schema';
 import { nextRunAfter, reportWindow, reportsService } from './reports.service';
+import { logger } from '@/lib/logger';
 
 const DUE_BATCH = 20;
 
@@ -202,7 +203,7 @@ export const claimAndSend = async (report: Report, now = new Date()): Promise<bo
   try {
     return (await sendReport(report, now)) > 0;
   } catch (error) {
-    console.error(`Report ${report.id} failed:`, String(error));
+    logger.error({ err: String(error) }, `Report ${report.id} failed`);
     return false;
   }
 };

@@ -17,6 +17,7 @@ import { deliverEmail } from '@/lib/mailer';
 import { localTimeAt } from '@/lib/platform-time';
 import { prisma } from '@/lib/prisma';
 import { redis, viewKeys } from '@/lib/redis';
+import { logger } from '@/lib/logger';
 
 const HOUR_MS = 3_600_000;
 const DAY_MS = 24 * HOUR_MS;
@@ -333,7 +334,7 @@ export class AlertsService {
     }
 
     await notify(created, campaign.title).catch((error: unknown) =>
-      console.error(`Alert email for ${campaign.id} failed:`, String(error)),
+      logger.error({ err: String(error) }, `Alert email for ${campaign.id} failed`),
     );
     return true;
   }

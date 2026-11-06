@@ -10,6 +10,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { z, ZodError } from 'zod';
 import { JsonWebTokenError, TokenExpiredError } from 'jsonwebtoken';
+import { logger } from '@/lib/logger';
 
 /** Structured error response shape */
 interface ErrorResponse {
@@ -73,7 +74,7 @@ export const errorHandler = (
   }
 
   // ── Unknown/unhandled errors ──────────────────────────────────────────────
-  console.error('Unhandled error:', err);
+  logger.error({ err }, 'Unhandled error');
 
   res.status(500).json({
     status: 'error',

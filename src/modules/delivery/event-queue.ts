@@ -18,9 +18,12 @@ import { prisma } from '@/lib/prisma';
 import { createBlockingRedis, reachDay, redis } from '@/lib/redis';
 import type { EventType } from './delivery.schema';
 import { flushInventory } from './viewer-activity';
+import { logger } from '@/lib/logger';
+import { eventsIngested, eventsWritten } from '@/lib/metrics';
 
 const STREAM = 'ad-events';
 const GROUP = 'rollup';
+const WORKER_HEARTBEAT = 'worker:last-batch';
 const READ_COUNT = 500;
 const BLOCK_MS = 1000;
 const STALE_ENTRY_MS = 30_000;
@@ -153,6 +156,8 @@ export const enqueueEvents = async (events: QueuedEvent[]): Promise<EnqueueResul
   }
 
   const accepted = await redis.enqueueEvents(STREAM, env.EVENT_DEDUPE_SECONDS, ...fields);
+  eventsIngested.inc({ result: 'accepted' }, accepted);
+  eventsIngested.inc({ result: 'duplicate' }, events.length - accepted);
   return { received: events.length, accepted, duplicates: events.length - accepted };
 };
 
@@ -363,6 +368,7 @@ const processEntries = async (entries: StreamEntry[]): Promise<void> => {
     if (!('f' in event)) touchedCampaigns.add(event.c);
   }
 
+  let written = 0;
   await prisma.$transaction(
     async (tx) => {
       const fresh = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
@@ -375,6 +381,7 @@ const processEntries = async (entries: StreamEntry[]): Promise<void> => {
       const freshIds = new Set(fresh.map(({ id }) => id));
       const events = entries.filter(([id]) => freshIds.has(id)).flatMap(eventsOf);
       const { rollups, creatives, filtered } = rollUp(events);
+      written = events.length;
 
       await writeRollups(tx, rollups);
       await writeCreatives(tx, creatives);
@@ -387,7 +394,10 @@ const processEntries = async (entries: StreamEntry[]): Promise<void> => {
     .pipeline()
     .xack(STREAM, GROUP, ...ids)
     .xdel(STREAM, ...ids)
+    // In Redis, so the API can report it even when the worker runs as its own process.
+    .set(WORKER_HEARTBEAT, String(Date.now()))
     .exec();
+  eventsWritten.inc(written);
 };
 
 const runHousekeeping = async (force = false): Promise<void> => {
@@ -473,6 +483,12 @@ export const drainEvents = async (consumer = 'drain'): Promise<void> => {
 /** How many batches are waiting to reach the database. */
 export const queueDepth = (): Promise<number> => redis.xlen(STREAM);
 
+/** When any worker last wrote a batch, in seconds, or null before the first one. */
+export const workerLastBatch = async (): Promise<number | null> => {
+  const at = Number(await redis.get(WORKER_HEARTBEAT));
+  return at > 0 ? at / 1000 : null;
+};
+
 let running = false;
 
 /** Runs until stopped. An error leaves entries on the stream to be retried. */
@@ -496,7 +512,7 @@ export const startEventWorker = (consumer = `worker-${process.pid}`): (() => Pro
         if (entries.length > 0) await processEntries(entries);
         await runHousekeeping();
       } catch (error) {
-        console.error('Event worker:', String(error));
+        logger.error({ err: String(error) }, 'Event worker');
         await ensureGroup(client).catch(() => undefined);
         await new Promise((resolve) => setTimeout(resolve, ERROR_PAUSE_MS));
       }

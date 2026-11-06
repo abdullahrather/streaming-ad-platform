@@ -6,9 +6,10 @@
  */
 import { prisma } from '@/lib/prisma';
 import { startEventWorker } from '@/modules/delivery/event-queue';
+import { logger } from '@/lib/logger';
 
 const stop = startEventWorker();
-console.info(`Event worker running (${process.pid}).`);
+logger.info(`Event worker running (${process.pid}).`);
 
 const shutdown = (): void => {
   void stop()

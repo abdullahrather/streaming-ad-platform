@@ -119,8 +119,18 @@ const makeVideo = async (video: DemoVideo): Promise<void> => {
   ]);
 };
 
-export const clearDemoMedia = (): Promise<void> =>
-  fsPromises.rm(MEDIA_DIR, { recursive: true, force: true });
+/**
+ * Empties the media folder rather than removing it: in Docker it's a mounted volume, which
+ * can't be removed.
+ */
+export const clearDemoMedia = async (): Promise<void> => {
+  const entries = await fsPromises.readdir(MEDIA_DIR).catch(() => [] as string[]);
+  await Promise.all(
+    entries.map((entry) =>
+      fsPromises.rm(path.join(MEDIA_DIR, entry), { recursive: true, force: true }),
+    ),
+  );
+};
 
 export const makeDemoVideos = async (videos: DemoVideo[]): Promise<void> => {
   const waiting = [...videos];

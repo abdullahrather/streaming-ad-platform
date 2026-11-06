@@ -11,6 +11,7 @@ import { decrypt } from '@/lib/security';
 import { AnthropicProvider } from './providers/anthropic';
 import { OpenAiCompatibleProvider } from './providers/openai-compatible';
 import type { AiProvider } from './providers/types';
+import { logger } from '@/lib/logger';
 
 export const PROVIDERS = ['anthropic', 'openai', 'local'] as const;
 export type ProviderName = (typeof PROVIDERS)[number];
@@ -166,7 +167,7 @@ export const refreshAiSettings = async (): Promise<void> => {
         : null;
     cached = null;
   } catch (error) {
-    console.error('Could not read the AI settings:', String(error));
+    logger.error({ err: String(error) }, 'Could not read the AI settings');
   }
 };
 

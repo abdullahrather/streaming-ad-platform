@@ -28,6 +28,7 @@ import { enqueueEvents, enqueueFiltered } from '@/modules/delivery/event-queue';
 import { deleteViewerProfile, noteViewedGenre } from '@/modules/delivery/viewer-activity';
 import { isBot, isExcessive, isImpossibleCompletion, type FilterReason } from './traffic-quality';
 import { buildVast, emptyVast } from './vast';
+import { logger } from '@/lib/logger';
 
 const TRACKING_AUDIENCE = 'ad-tracking';
 const TRACKING_TTL = '1h';
@@ -316,7 +317,9 @@ playbackRouter.get(
     const saved = isBot(req.get('user-agent'))
       ? filterEvent(claims, 'click', 'BOT_USER_AGENT')
       : record(claims, 'CLICK', 'click');
-    await saved.catch((error: unknown) => console.error('Click not recorded:', String(error)));
+    await saved.catch((error: unknown) =>
+      logger.error({ err: String(error) }, 'Click not recorded'),
+    );
     res.redirect(302, creative.clickUrl);
   }),
 );

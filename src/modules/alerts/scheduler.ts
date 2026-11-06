@@ -10,6 +10,8 @@ import { billingService } from '@/modules/billing/billing.service';
 import { refreshRates } from '@/modules/billing/currency';
 import { runDueReports } from '@/modules/reports/report-delivery';
 import { alertsService } from './alerts.service';
+import { logger } from '@/lib/logger';
+import { schedulerFailures, schedulerLastSuccess } from '@/lib/metrics';
 
 const REPORT_CHECK_MS = 60_000;
 const BILLING_CHECK_MS = 5 * 60_000;
@@ -25,7 +27,11 @@ const every = (task: () => Promise<unknown>, name: string, ms: number): (() => v
     if (running) return;
     running = true;
     task()
-      .catch((error: unknown) => console.error(`${name} failed:`, String(error)))
+      .then(() => schedulerLastSuccess.setToCurrentTime({ task: name }))
+      .catch((error: unknown) => {
+        schedulerFailures.inc({ task: name });
+        logger.error({ err: String(error), task: name }, `${name} failed`);
+      })
       .finally(() => {
         running = false;
       });

@@ -6,6 +6,7 @@
  */
 import { Redis } from 'ioredis';
 import { env } from '@/config/env';
+import { logger } from '@/lib/logger';
 
 const DAILY_TTL = 2 * 86400;
 // Daily reach sketches outlive any report range a person can ask for.
@@ -108,7 +109,7 @@ export interface ScriptedRedis extends Redis {
 
 const connect = (): ScriptedRedis => {
   const client = new Redis(env.REDIS_URL, { maxRetriesPerRequest: 2 });
-  client.on('error', (error: Error) => console.error('Redis:', error.message));
+  client.on('error', (error: Error) => logger.error({ err: error.message }, 'Redis'));
   client.defineCommand('enqueueEvents', { numberOfKeys: 1, lua: ENQUEUE_EVENTS });
   client.defineCommand('reserveAd', { numberOfKeys: 8, lua: RESERVE_AD });
   return client as ScriptedRedis;
@@ -119,7 +120,7 @@ export const redis = connect();
 /** A separate connection, because waiting for new events blocks the one it uses. */
 export const createBlockingRedis = (): Redis => {
   const client = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null });
-  client.on('error', (error: Error) => console.error('Redis:', error.message));
+  client.on('error', (error: Error) => logger.error({ err: error.message }, 'Redis'));
   return client;
 };
 

@@ -1,12 +1,14 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # Stage 1: Builder — compiles the API and the dashboard. Also used by
-# docker-compose, because it keeps the tools needed to seed demo data.
+# docker-compose, because it keeps the tools needed to seed demo data and, with
+# the PostgreSQL client, to take backups.
 # ─────────────────────────────────────────────────────────────────────────────
 FROM node:24-alpine AS builder
 
 WORKDIR /app
 
-RUN apk add --no-cache openssl
+# The client matches the PostgreSQL 16 in docker-compose.yml, so backups restore into it.
+RUN apk add --no-cache openssl postgresql16-client
 
 COPY package*.json ./
 COPY web/package*.json ./web/

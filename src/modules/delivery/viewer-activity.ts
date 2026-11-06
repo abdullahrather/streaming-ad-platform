@@ -9,6 +9,7 @@
 import { prisma } from '@/lib/prisma';
 import { localTimeAt } from '@/lib/platform-time';
 import { redis } from '@/lib/redis';
+import { logger } from '@/lib/logger';
 
 const PROFILE_DAYS = 90;
 const COUNTER_DAYS = 3;
@@ -56,7 +57,7 @@ export const recordAdRequest = (request: AdRequest, now = Date.now()): void => {
     }
   }
 
-  pipeline.exec().catch((error: unknown) => console.warn('Inventory:', String(error)));
+  pipeline.exec().catch((error: unknown) => logger.warn({ err: String(error) }, 'Inventory'));
 };
 
 /**

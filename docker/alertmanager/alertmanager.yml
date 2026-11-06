@@ -1,0 +1,18 @@
+# Sends alerts to the API, which emails them to platform admins (the local mailbox when
+# there's no SMTP_URL). The token matches ALERT_WEBHOOK_TOKEN in docker-compose.monitoring.yml
+# and is for this local stack only.
+route:
+  receiver: platform-admins
+  group_by: [alertname]
+  group_wait: 10s
+  group_interval: 1m
+  repeat_interval: 4h
+
+receivers:
+  - name: platform-admins
+    webhook_configs:
+      - url: http://api:3000/ops/alerts
+        send_resolved: true
+        http_config:
+          authorization:
+            credentials: local-alert-token

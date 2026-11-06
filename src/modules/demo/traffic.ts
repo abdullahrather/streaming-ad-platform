@@ -16,6 +16,7 @@ import { enqueueEvents, type QueuedEvent } from '@/modules/delivery/event-queue'
 import { noteViewedGenre } from '@/modules/delivery/viewer-activity';
 import { AdSlot, Device } from '@prisma/client';
 import { isActive } from './activity';
+import { logger } from '@/lib/logger';
 
 const TICK_MS = 2000;
 const AD_BREAKS_PER_TICK = 30;
@@ -128,12 +129,12 @@ export function startTraffic(): void {
 
     running = true;
     runTrafficTick()
-      .catch((error: unknown) => console.warn('Demo traffic:', String(error)))
+      .catch((error: unknown) => logger.warn({ err: String(error) }, 'Demo traffic'))
       .finally(() => {
         running = false;
       });
   }, TICK_MS);
   timer.unref();
 
-  console.info(`🎬  Demo traffic: ${env.SIMULATE_TRAFFIC}`);
+  logger.info({ traffic: env.SIMULATE_TRAFFIC }, 'Demo traffic started');
 }

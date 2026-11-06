@@ -16,6 +16,7 @@ import { counterKeys, redis, viewKeys } from '@/lib/redis';
 import { decisionCache, type CachedCampaign, type CachedSegment } from './decision-cache';
 import type { AdDecisionQuery } from './delivery.schema';
 import { recordAdRequest, viewerInterests } from './viewer-activity';
+import { adDecisions } from '@/lib/metrics';
 
 // EVEN pacing lets a campaign run this far ahead of schedule before holding it back.
 const EVEN_PACING_TOLERANCE = 1.05;
@@ -120,9 +121,16 @@ const pickCreative = (creatives: Creative[]): Creative => {
 
 export class DeliveryService {
   /** Picks the ad for a break, or returns null when nothing can run here. */
-  async decide(
+  /** Chooses an ad for a break, and counts whether one was found. */
+  async decide(query: AdDecisionQuery, options: DecisionOptions = {}): Promise<AdDecision | null> {
+    const decision = await this.choose(query, options);
+    adDecisions.inc({ result: decision ? 'served' : 'none' });
+    return decision;
+  }
+
+  private async choose(
     query: AdDecisionQuery,
-    { requireCreative = false, viewerId, breakId, consent }: DecisionOptions = {},
+    { requireCreative = false, viewerId, breakId, consent }: DecisionOptions,
   ): Promise<AdDecision | null> {
     const { campaigns, genreByShow } = await decisionCache.get();
     const genre = genreByShow.get(query.showId);

@@ -1,0 +1,35 @@
+# Metrics, logs and traces, linked: a log line's trace_id opens its trace, and a trace
+# opens the logs written while it ran.
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    uid: prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+
+  - name: Loki
+    uid: loki
+    type: loki
+    access: proxy
+    url: http://loki:3100
+    jsonData:
+      derivedFields:
+        - name: trace
+          datasourceUid: tempo
+          matcherRegex: '"trace_id":"(\w+)"'
+          url: '$${__value.raw}'
+
+  - name: Tempo
+    uid: tempo
+    type: tempo
+    access: proxy
+    url: http://tempo:3200
+    jsonData:
+      tracesToLogsV2:
+        datasourceUid: loki
+        filterByTraceID: true
+        spanStartTimeShift: '-1m'
+        spanEndTimeShift: '1m'

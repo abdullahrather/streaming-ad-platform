@@ -58,6 +58,8 @@ jobs:
       - run: npm run format:check
       - run: npm run typecheck
       - run: npm test
+      - name: Back up the database and prove the backup restores
+        run: npm run db:restore-drill
       - run: npm run build
       - run: npm audit --omit=dev --audit-level=high
 
@@ -87,6 +89,11 @@ jobs:
         run: docker build --target production -t campaign-analytics .
       - name: Build the public demo image
         run: docker build -f Dockerfile.demo -t campaign-analytics-demo .
+      - name: Check the monitoring configuration
+        run: |
+          docker compose -f docker-compose.yml -f docker-compose.monitoring.yml config -q
+          docker run --rm -v "$PWD/docker/prometheus:/etc/prometheus:ro" --entrypoint promtool             prom/prometheus:v3.5.0 check config /etc/prometheus/prometheus.yml
+          docker run --rm -v "$PWD/docker/alertmanager:/etc/alertmanager:ro" --entrypoint amtool             prom/alertmanager:v0.28.1 check-config /etc/alertmanager/alertmanager.yml
       - name: Start the stack
         run: docker compose up -d --build
       - name: Check the running app

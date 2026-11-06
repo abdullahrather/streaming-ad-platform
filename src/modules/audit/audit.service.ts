@@ -6,6 +6,7 @@
  */
 import { Prisma, type AuditLog } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { logger } from '@/lib/logger';
 
 export interface AuditEvent {
   action: string;
@@ -54,7 +55,7 @@ class AuditService {
         },
       });
     } catch (error) {
-      console.error(`Audit "${event.action}" failed:`, String(error));
+      logger.error({ err: String(error) }, `Audit "${event.action}" failed`);
     }
   }
 
