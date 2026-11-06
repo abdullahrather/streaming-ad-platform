@@ -23,6 +23,7 @@ import { diagnosisService, type Diagnosis } from '@/modules/campaigns/diagnosis.
 import { aiProvider } from './ai.config';
 import { buildTools } from './ai.tools';
 import { AiRefusalError, type AiProvider, type ToolCallRecord } from './providers/types';
+import { logger } from '@/lib/logger';
 
 const BACKGROUND_TIMEOUT_MS = 45_000;
 const MAX_RECOMMENDATIONS = 3;
@@ -455,7 +456,7 @@ export class AiService {
       return { answer: result.text, toolsUsed, refused: false };
     } catch (error) {
       if (error instanceof AppError) throw error;
-      console.error('AI question failed:', String(error));
+      logger.error({ err: String(error) }, 'AI question failed');
       throw new AppError(502, 'The AI model could not be reached. Try again in a moment.');
     }
   }
@@ -490,7 +491,7 @@ ${DATA_RULE}`,
     } catch (error) {
       if (error instanceof AiRefusalError)
         throw new AppError(422, 'The AI model declined to suggest changes.');
-      console.error('AI recommendations failed:', String(error));
+      logger.error({ err: String(error) }, 'AI recommendations failed');
       throw new AppError(502, 'The AI model could not suggest changes. Try again in a moment.');
     }
 
@@ -510,7 +511,7 @@ ${DATA_RULE}`,
       if (!diagnosis.willReachGoal) {
         const reason = slowsDelivery(effective, campaign);
         if (reason) {
-          console.info(`Dropped an AI suggestion for ${campaignId} that ${reason}.`);
+          logger.info(`Dropped an AI suggestion for ${campaignId} that ${reason}.`);
           continue;
         }
       }
@@ -629,7 +630,7 @@ ${DATA_RULE}`,
     } catch (error) {
       if (error instanceof AiRefusalError)
         throw new AppError(422, 'The AI model declined to draft this campaign.');
-      console.error('AI campaign draft failed:', String(error));
+      logger.error({ err: String(error) }, 'AI campaign draft failed');
       throw new AppError(502, 'The AI model could not draft a campaign. Try again in a moment.');
     }
 
@@ -708,9 +709,11 @@ ${DATA_RULE}`,
 
     const checked = createCampaignSchema.safeParse(input);
     if (!checked.success) {
-      console.info(
-        'AI draft broke the campaign rules:',
-        checked.error.issues.map(({ path, message }) => `${path.join('.')}: ${message}`).join('; '),
+      logger.info(
+        {
+          issues: checked.error.issues.map(({ path, message }) => `${path.join('.')}: ${message}`),
+        },
+        'AI draft broke the campaign rules',
       );
       throw new AppError(
         422,
@@ -747,7 +750,7 @@ ${DATA_RULE}`,
       );
       return z.object({ explanation: z.string().min(1).max(1200) }).parse(raw).explanation;
     } catch (error) {
-      console.error(`AI alert explanation for ${alert.id} failed:`, String(error));
+      logger.error({ err: String(error) }, `AI alert explanation for ${alert.id} failed`);
       return null;
     }
   }
@@ -788,7 +791,7 @@ ${DATA_RULE}`,
       );
       return z.object({ summary: z.string().min(1).max(2000) }).parse(raw).summary;
     } catch (error) {
-      console.error(`AI report summary for ${organisationId} failed:`, String(error));
+      logger.error({ err: String(error) }, `AI report summary for ${organisationId} failed`);
       return null;
     }
   }
@@ -828,7 +831,7 @@ ${DATA_RULE}`,
       );
       await record({ status: 'done', ...adCheckSchema.parse(raw) });
     } catch (error) {
-      console.error(`AI check of ad ${creativeId} failed:`, String(error));
+      logger.error({ err: String(error) }, `AI check of ad ${creativeId} failed`);
       await record({
         status: 'unavailable',
         summary:

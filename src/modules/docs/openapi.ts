@@ -156,6 +156,29 @@ export const openApiDocument = {
         responses: responses('200', 'Running'),
       },
     },
+    '/metrics': {
+      get: {
+        tags: ['Service'],
+        summary: 'Prometheus metrics',
+        description:
+          'Request timings by route, ad decisions, events, the queue backlog, whether Postgres and Redis answer, scheduled task failures, and the newest backup and restore drill. With METRICS_TOKEN set, send it as a bearer token; without one, this is only served outside production.',
+        responses: responses('200', 'Metrics in the Prometheus text format', '401'),
+      },
+    },
+    '/ops/alerts': {
+      post: {
+        tags: ['Service'],
+        summary: 'Alertmanager webhook',
+        description:
+          'Called by Alertmanager, not by people. Needs ALERT_WEBHOOK_TOKEN as a bearer token. Emails each firing or resolved alert to the platform admins.',
+        responses: responses(
+          '200',
+          'How many alerts and how many admins they went to',
+          '401',
+          '422',
+        ),
+      },
+    },
     '/health': {
       get: {
         tags: ['Service'],

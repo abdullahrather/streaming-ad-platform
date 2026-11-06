@@ -7,6 +7,7 @@
 import nodemailer from 'nodemailer';
 import { prisma } from '@/lib/prisma';
 import { env } from '@/config/env';
+import { logger } from '@/lib/logger';
 
 export interface Attachment {
   filename: string;
@@ -51,7 +52,7 @@ const deliver = async ({
     return;
   }
 
-  console.warn(`Email to ${to} was not sent: SMTP_URL is not set.`);
+  logger.warn(`Email to ${to} was not sent: SMTP_URL is not set.`);
 };
 
 /** Sends and waits, for scheduled jobs that need to know the email went out. */
@@ -62,5 +63,5 @@ export const deliverEmail = deliver;
  * address has an account, and a mail problem shouldn't fail the request.
  */
 export const sendEmail = (email: Email): void => {
-  deliver(email).catch((error: unknown) => console.error('Email failed:', String(error)));
+  deliver(email).catch((error: unknown) => logger.error({ err: String(error) }, 'Email failed'));
 };

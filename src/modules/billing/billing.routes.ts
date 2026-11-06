@@ -14,6 +14,7 @@ import { AppError } from '@/middleware/errorHandler';
 import { invoicePdf } from './billing.pdf';
 import { billingService, creditSchema, detailsSchema, planSchema } from './billing.service';
 import { checkoutSchema, confirmCheckout, createCheckout, handleWebhook } from './stripe';
+import { logger } from '@/lib/logger';
 
 /** Owners pay; managers can see billing but not spend the organisation's money. */
 const ownerOf = (req: Request): { organisationId: string; userId: string } => {
@@ -34,7 +35,7 @@ export const stripeWebhook = async (req: Request, res: Response): Promise<void> 
     res.status(200).json({ received: true });
   } catch (error) {
     const status = error instanceof AppError ? error.statusCode : 500;
-    if (status === 500) console.error('Stripe webhook failed:', String(error));
+    if (status === 500) logger.error({ err: String(error) }, 'Stripe webhook failed');
     res.status(status).json({
       status: 'error',
       message: status === 500 ? 'The webhook could not be processed.' : (error as Error).message,

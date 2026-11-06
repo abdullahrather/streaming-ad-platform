@@ -20,6 +20,7 @@ import { AppError } from '@/middleware/errorHandler';
 import { campaignsService } from '@/modules/campaigns/campaigns.service';
 import { decisionCache } from '@/modules/delivery/decision-cache';
 import type { ReviewDto, UploadCreativeDto } from './creatives.schema';
+import { logger } from '@/lib/logger';
 
 const MIN_SECONDS = 5;
 const MAX_SECONDS = 120;
@@ -261,9 +262,11 @@ class CreativesService {
       // Loaded lazily, since the assistant isn't needed when it's off.
       void import('@/modules/ai/ai.service')
         .then(({ aiService }) => aiService.checkAd(id))
-        .catch((error: unknown) => console.error(`AI check of ad ${id} failed:`, String(error)));
+        .catch((error: unknown) =>
+          logger.error({ err: String(error) }, `AI check of ad ${id} failed`),
+        );
     } catch (error) {
-      console.error(`Creative ${id} failed:`, String(error));
+      logger.error({ err: String(error) }, `Creative ${id} failed`);
       await prisma.creative.updateMany({
         where: { id },
         data: {

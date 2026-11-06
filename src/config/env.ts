@@ -69,6 +69,16 @@ const envSchema = z.object({
     .url()
     .default('https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml'),
   VIES_URL: z.string().url().default('https://ec.europa.eu/taxation_customs/vies/rest-api'),
+
+  // Operations. Logs are JSON lines; LOKI_URL also sends them to Loki.
+  LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
+  LOKI_URL: z.string().default(''),
+  // Prometheus scrapes /metrics with this as a bearer token. Empty serves it only outside production.
+  METRICS_TOKEN: z.string().default(''),
+  // Alertmanager posts alerts here with this as a bearer token, and admins get them by email.
+  ALERT_WEBHOOK_TOKEN: z.string().default(''),
+  // Where backups are written. The newest one's age is reported in the metrics.
+  BACKUP_DIR: z.string().default('.data/backups'),
 });
 
 const parsed = envSchema.safeParse(process.env);

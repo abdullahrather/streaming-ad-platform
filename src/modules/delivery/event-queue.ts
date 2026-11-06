@@ -18,6 +18,8 @@ import { prisma } from '@/lib/prisma';
 import { createBlockingRedis, reachDay, redis } from '@/lib/redis';
 import type { EventType } from './delivery.schema';
 import { flushInventory } from './viewer-activity';
+import { logger } from '@/lib/logger';
+import { eventsIngested, eventsWritten, workerLastBatch } from '@/lib/metrics';
 
 const STREAM = 'ad-events';
 const GROUP = 'rollup';
@@ -153,6 +155,8 @@ export const enqueueEvents = async (events: QueuedEvent[]): Promise<EnqueueResul
   }
 
   const accepted = await redis.enqueueEvents(STREAM, env.EVENT_DEDUPE_SECONDS, ...fields);
+  eventsIngested.inc({ result: 'accepted' }, accepted);
+  eventsIngested.inc({ result: 'duplicate' }, events.length - accepted);
   return { received: events.length, accepted, duplicates: events.length - accepted };
 };
 
@@ -363,6 +367,7 @@ const processEntries = async (entries: StreamEntry[]): Promise<void> => {
     if (!('f' in event)) touchedCampaigns.add(event.c);
   }
 
+  let written = 0;
   await prisma.$transaction(
     async (tx) => {
       const fresh = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
@@ -375,6 +380,7 @@ const processEntries = async (entries: StreamEntry[]): Promise<void> => {
       const freshIds = new Set(fresh.map(({ id }) => id));
       const events = entries.filter(([id]) => freshIds.has(id)).flatMap(eventsOf);
       const { rollups, creatives, filtered } = rollUp(events);
+      written = events.length;
 
       await writeRollups(tx, rollups);
       await writeCreatives(tx, creatives);
@@ -388,6 +394,8 @@ const processEntries = async (entries: StreamEntry[]): Promise<void> => {
     .xack(STREAM, GROUP, ...ids)
     .xdel(STREAM, ...ids)
     .exec();
+  eventsWritten.inc(written);
+  workerLastBatch.setToCurrentTime();
 };
 
 const runHousekeeping = async (force = false): Promise<void> => {
@@ -496,7 +504,7 @@ export const startEventWorker = (consumer = `worker-${process.pid}`): (() => Pro
         if (entries.length > 0) await processEntries(entries);
         await runHousekeeping();
       } catch (error) {
-        console.error('Event worker:', String(error));
+        logger.error({ err: String(error) }, 'Event worker');
         await ensureGroup(client).catch(() => undefined);
         await new Promise((resolve) => setTimeout(resolve, ERROR_PAUSE_MS));
       }

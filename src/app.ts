@@ -14,7 +14,6 @@ import express, { type Application, type Request, type Response } from 'express'
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import cors from 'cors';
-import morgan from 'morgan';
 
 import { accountRouter } from '@/modules/account/account.routes';
 import { adminRouter } from '@/modules/admin/admin.routes';
@@ -33,6 +32,8 @@ import { segmentsRouter } from '@/modules/segments/segments.routes';
 import { showsRouter } from '@/modules/shows/shows.routes';
 import { invitationsRouter, teamRouter } from '@/modules/team/team.routes';
 import { errorHandler } from '@/middleware/errorHandler';
+import { observe } from '@/middleware/observe';
+import { opsRouter } from '@/modules/ops/ops.routes';
 import { prisma } from '@/lib/prisma';
 import { redis } from '@/lib/redis';
 import { env } from '@/config/env';
@@ -54,6 +55,9 @@ export function createApp(): Application {
   const origins = env.CORS_ORIGIN.split(',').filter(Boolean);
   app.use(cors({ origin: origins.length > 0 ? origins : false, credentials: true }));
 
+  // ── Request IDs, logs and timings ─────────────────────────────────────────
+  app.use(observe());
+
   // ── Body parsing ──────────────────────────────────────────────────────────
   // Stripe signs the raw body, so its webhook is read before the JSON parser.
   app.post(
@@ -65,11 +69,6 @@ export function createApp(): Application {
   );
   app.use(express.json({ limit: '1mb' }));
   app.use(cookieParser());
-
-  // ── Logging ───────────────────────────────────────────────────────────────
-  if (env.NODE_ENV === 'production') {
-    app.use(morgan('combined', { skip: (req) => req.path === '/live' }));
-  }
 
   // ── Status checks (no auth required) ─────────────────────────────────────
   // /live skips the database, so a hosting health check can't keep it awake.
@@ -84,6 +83,7 @@ export function createApp(): Application {
   });
 
   // ── API routes ────────────────────────────────────────────────────────────
+  app.use(opsRouter);
   app.use(docsRouter);
   app.use(devRouter);
   app.use('/auth', authRouter);
