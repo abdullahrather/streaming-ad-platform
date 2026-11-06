@@ -14,6 +14,7 @@ import express, { type Application, type Request, type Response } from 'express'
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import cors from 'cors';
+import rateLimit from 'express-rate-limit';
 
 import { accountRouter } from '@/modules/account/account.routes';
 import { adminRouter } from '@/modules/admin/admin.routes';
@@ -83,6 +84,31 @@ export function createApp(): Application {
   });
 
   // ── API routes ────────────────────────────────────────────────────────────
+  // The dashboard's API gets a per-address cap. Players, ad servers and media have their own.
+  app.use(
+    [
+      '/auth',
+      '/account',
+      '/team',
+      '/invitations',
+      '/admin',
+      '/campaigns',
+      '/creatives',
+      '/shows',
+      '/segments',
+      '/reports',
+      '/alerts',
+      '/ai',
+      '/billing',
+    ],
+    rateLimit({
+      windowMs: 60_000,
+      limit: env.DASHBOARD_RATE_LIMIT,
+      standardHeaders: 'draft-7',
+      legacyHeaders: false,
+      message: { status: 'error', message: 'Too many requests. Try again in a minute.' },
+    }),
+  );
   app.use(opsRouter);
   app.use(docsRouter);
   app.use(devRouter);

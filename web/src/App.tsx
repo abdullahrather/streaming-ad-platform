@@ -124,8 +124,9 @@ const App = () => {
   const seesActivity = user.organisationRole === 'OWNER' || user.organisationRole === 'MANAGER';
   // Owners and managers pay for campaigns; admins add credit and see revenue.
   const seesBilling = user.role === 'ADMIN' || (hasOrganisation && !isGuest && seesActivity);
-  const campaignId = route.path.match(/^\/campaigns\/(.+)$/)?.[1];
-  const reportId = route.path.match(/^\/reports\/(.+)$/)?.[1];
+  // Only ID characters, so a crafted link can't point API requests at another path.
+  const campaignId = route.path.match(/^\/campaigns\/([\w-]+)$/)?.[1];
+  const reportId = route.path.match(/^\/reports\/([\w-]+)$/)?.[1];
 
   const page = (() => {
     if (campaignId) {

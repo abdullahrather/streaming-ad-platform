@@ -4,6 +4,17 @@ The main changes in each version. Every release's full notes are on the [Release
 
 ## Unreleased
 
+### Fixed
+
+- A suspended organisation's campaigns kept delivering ads; they now stop, and start again when it's restored
+
+### Security
+
+- The dashboard API is rate limited per address, set with `DASHBOARD_RATE_LIMIT` (600 requests a minute by default)
+- The Claude workflow pins its third-party action to a commit
+
+## 1.11.1
+
 ### Added
 
 - GDPR tools: viewers can download and delete everything held about them (`GET` and `DELETE /player/data`), and dashboard users can download their data and delete their account (`GET /account/export`, `DELETE /account`)

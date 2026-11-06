@@ -231,6 +231,8 @@ Real players use `/vast`, which only considers campaigns with an approved ad. `/
 - **Invalid traffic is filtered.** Bots, viewers requesting too many ads, and ads finished impossibly fast are removed from results and reported on the campaign's page.
 - **Player events** use signed links from the VAST response, so players hold no secret and can't report on another campaign.
 - **Permissions** are checked against the database on every request, so sign-outs, suspensions and role changes apply immediately.
+- **Rate limits** cap sign-in attempts, AI questions, player requests and dashboard API calls from one address (`DASHBOARD_RATE_LIMIT`, 600 a minute by default).
+- **Suspending an organisation** stops its ads within seconds, as well as signing its members out.
 - **Secrets** are never stored in plain text: email links and recovery codes are hashed, and two-factor secrets are encrypted.
 - **Scanned in CI:** CodeQL checks the code, pull requests that add a vulnerable package fail, and `npm audit` checks both packages. GitHub's secret scanning blocks pushed keys.
 

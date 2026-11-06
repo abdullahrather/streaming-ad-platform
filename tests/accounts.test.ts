@@ -6,12 +6,21 @@
 import request from 'supertest';
 import { OrganisationRole, Role } from '@prisma/client';
 import { createApp } from '@/app';
+import { env } from '@/config/env';
 import { decrypt, hashToken } from '@/lib/security';
 import { generateTotpSecret, totpCode, verifyTotp } from '@/lib/totp';
-import { clearDatabase, createTestCampaign, createTestUser, testPrisma } from './helpers/db';
+import { deliveryService } from '@/modules/delivery/delivery.service';
+import {
+  clearDatabase,
+  createTestCampaign,
+  createTestShow,
+  createTestUser,
+  testPrisma,
+} from './helpers/db';
 
 const app = createApp();
 const PASSWORD = 'Long-Enough-1234';
+const PLACEMENT = { slot: 'PRE_ROLL', country: 'DE', device: 'CTV' } as const;
 
 type User = { email: string; password: string };
 
@@ -945,6 +954,25 @@ describe('Admin console', () => {
     expect((await request(app).get('/campaigns').set('Authorization', token)).status).toBe(403);
   });
 
+  it('suspending an organisation stops its ads until it is restored', async () => {
+    const user = await createTestUser({ email: 'advertiser@test.com' });
+    const show = await createTestShow();
+    const campaign = await createTestCampaign(user.id);
+    const adminToken = await login(await admin());
+    const suspend = (suspended: boolean) =>
+      request(app)
+        .patch(`/admin/organisations/${user.organisationId}`)
+        .set('Authorization', adminToken)
+        .send({ suspended });
+    const decide = () => deliveryService.decide({ ...PLACEMENT, showId: show.id });
+
+    expect((await decide())?.campaignId).toBe(campaign.id);
+    await suspend(true);
+    expect(await decide()).toBeNull();
+    await suspend(false);
+    expect((await decide())?.campaignId).toBe(campaign.id);
+  });
+
   it('cannot suspend your own account', async () => {
     const user = await admin();
 
@@ -969,6 +997,30 @@ describe('Guest account', () => {
     );
 
     expect(statuses).toEqual([403, 403]);
+  });
+});
+
+describe('Dashboard rate limit', () => {
+  it('caps dashboard requests from one address, but not the player', async () => {
+    const settings = env as unknown as Record<string, unknown>;
+    const before = settings['DASHBOARD_RATE_LIMIT'];
+    settings['DASHBOARD_RATE_LIMIT'] = 3;
+    try {
+      const limited = createApp();
+      const dashboard = [];
+      for (let attempt = 0; attempt < 4; attempt += 1) {
+        dashboard.push((await request(limited).get('/campaigns')).status);
+      }
+      const player = [];
+      for (let attempt = 0; attempt < 4; attempt += 1) {
+        player.push((await request(limited).get('/player/catalogue')).status);
+      }
+
+      expect(dashboard).toEqual([401, 401, 401, 429]);
+      expect(player).toEqual([200, 200, 200, 200]);
+    } finally {
+      settings['DASHBOARD_RATE_LIMIT'] = before;
+    }
   });
 });
 

@@ -47,3 +47,14 @@ test('switches to German and back, keeping the sign-in', async ({ page }) => {
   await page.getByLabel('Sprache').selectOption('en');
   await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible();
 });
+
+test('a crafted link cannot point campaign requests at another API path', async ({ page }) => {
+  await signIn(page, 'admin@example.com', 'admin1234');
+  const requested: string[] = [];
+  page.on('request', (sent) => requested.push(new URL(sent.url()).pathname));
+
+  await page.goto('/#/campaigns/../admin/users');
+  await page.waitForLoadState('networkidle');
+
+  expect(requested.filter((path) => path.startsWith('/admin/users'))).toEqual([]);
+});
