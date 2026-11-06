@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { OpenAlerts } from './alerts';
 import { CampaignAssistant, DeliveryCheck, DraftFromBrief, useAiStatus } from './assistant';
-import { api, type Campaign, type CampaignDraft, type User } from './api';
+import { ApiError, api, type Campaign, type CampaignDraft, type User } from './api';
 import CampaignForm from './CampaignForm';
 import { CampaignAds } from './creatives';
 import {
@@ -30,7 +30,7 @@ import {
   formatPercent,
 } from './format';
 import { previousLabel, rangeFor, useLiveData } from './hooks';
-import { ErrorNote } from './ui';
+import { ErrorNote, firstError } from './ui';
 
 const CampaignTable = ({ campaigns, isAdmin }: { campaigns: Campaign[]; isAdmin: boolean }) => (
   <section className="card">
@@ -259,13 +259,22 @@ export const CampaignPage = ({
 
   const campaign = data?.campaign;
 
+  // Shown when a change is refused, such as resuming without enough balance.
+  const [actionError, setActionError] = useState('');
+  const failed = (reason: unknown): void => {
+    setActionError(reason instanceof ApiError ? firstError(reason) : String(reason));
+    refresh();
+  };
+
   const setStatus = (status: 'ACTIVE' | 'PAUSED') => {
-    api.update(id, { status }).then(refresh).catch(refresh);
+    setActionError('');
+    api.update(id, { status }).then(refresh).catch(failed);
   };
 
   const remove = () => {
     if (!campaign || !window.confirm(`Delete “${campaign.title}” and all its data?`)) return;
-    api.remove(id).then(onBack).catch(refresh);
+    setActionError('');
+    api.remove(id).then(onBack).catch(failed);
   };
 
   return (
@@ -309,6 +318,7 @@ export const CampaignPage = ({
             </div>
           </header>
 
+          <ErrorNote message={actionError} />
           <OpenAlerts campaignId={campaign.id} />
           <Kpis
             totals={campaign}

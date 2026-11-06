@@ -9,6 +9,9 @@ const euros = new Intl.NumberFormat('en', {
 export const formatCompact = (value: number): string => compact.format(value);
 export const formatNumber = (value: number): string => whole.format(value);
 export const formatEuros = (cents: number): string => euros.format(cents / 100);
+const exactEuros = new Intl.NumberFormat('en', { style: 'currency', currency: 'EUR' });
+/** To the cent, for balances and invoices. */
+export const formatMoney = (cents: number): string => exactEuros.format(cents / 100);
 export const formatCpm = (cents: number): string => `€${(cents / 100).toFixed(2)}`;
 export const formatPercent = (value: number, digits = 1): string =>
   `${(value * 100).toFixed(digits)}%`;

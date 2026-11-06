@@ -1,15 +1,17 @@
 /**
  * src/modules/alerts/scheduler.ts
  *
- * Sends due reports every minute and checks campaigns for alerts every few
- * minutes. Every API process can run it: reports are claimed before sending and
- * open alerts are unique, so nothing goes out twice.
+ * Sends due reports every minute, checks campaigns for alerts every few minutes,
+ * and invoices finished campaigns every five. Every API process can run it: reports
+ * are claimed before sending, open alerts are unique, and a campaign is billed once.
  */
 import { env } from '@/config/env';
+import { billingService } from '@/modules/billing/billing.service';
 import { runDueReports } from '@/modules/reports/report-delivery';
 import { alertsService } from './alerts.service';
 
 const REPORT_CHECK_MS = 60_000;
+const BILLING_CHECK_MS = 5 * 60_000;
 // The first check runs soon after startup rather than a full interval later.
 const FIRST_CHECK_MS = 15_000;
 
@@ -38,9 +40,11 @@ const every = (task: () => Promise<unknown>, name: string, ms: number): (() => v
 export const startScheduler = (): (() => void) => {
   const stopReports = every(() => runDueReports(), 'Scheduled reports', REPORT_CHECK_MS);
   const stopAlerts = every(() => alertsService.check(), 'Alert check', env.ALERT_CHECK_MS);
+  const stopBilling = every(() => billingService.run(), 'Billing', BILLING_CHECK_MS);
 
   return () => {
     stopReports();
     stopAlerts();
+    stopBilling();
   };
 };

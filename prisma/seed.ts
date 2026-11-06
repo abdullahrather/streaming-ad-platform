@@ -477,6 +477,7 @@ async function main(): Promise<void> {
   await prisma.campaign.deleteMany();
   await prisma.show.deleteMany();
   await prisma.organisation.deleteMany();
+  await prisma.invoiceSequence.deleteMany();
   await prisma.user.deleteMany();
   await prisma.auditLog.deleteMany();
   await prisma.inventoryHour.deleteMany();
@@ -525,6 +526,26 @@ async function main(): Promise<void> {
       memberships: { create: { userId: rival.id, role: OrganisationRole.OWNER } },
     },
   });
+  // Prepaid credit, paid in by bank transfer a month ago: enough for every demo
+  // campaign's budget, with room to start another.
+  for (const [organisation, advertiser] of [
+    [brightline, null],
+    [casa, 'Casa Mobili'],
+  ] as const) {
+    const budgets = CAMPAIGNS.filter((spec) =>
+      advertiser ? spec.advertiser === advertiser : spec.advertiser !== 'Casa Mobili',
+    ).reduce((sum, spec) => sum + spec.budget, 0);
+    await prisma.balanceEntry.create({
+      data: {
+        organisationId: organisation.id,
+        kind: 'CREDIT',
+        amountCents: Math.ceil((budgets + 5_000_000) / 100_000) * 100_000,
+        description: 'Bank transfer received',
+        createdById: admin.id,
+        createdAt: new Date(Date.now() - 31 * DAY),
+      },
+    });
+  }
   await prisma.organisation.create({
     data: {
       name: 'Platform Team',
@@ -571,6 +592,8 @@ async function main(): Promise<void> {
         targetGenres: spec.genres,
         targetDevices: spec.devices,
         targetSlots: spec.slots,
+        // A finished campaign completed when its flight ended, so it's invoiced at startup.
+        ...(spec.status === CampaignStatus.COMPLETED ? { completedAt: endsAt } : {}),
         ...RULES[spec.title],
       },
     });

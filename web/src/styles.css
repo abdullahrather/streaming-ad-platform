@@ -1190,3 +1190,38 @@ details > summary {
   margin-top: 0.2rem;
   padding: 0;
 }
+
+/* ─── Billing ─────────────────────────────────────────────────────────────────── */
+
+.positive {
+  color: var(--good);
+}
+
+.section-header {
+  margin-top: 1.5rem;
+}
+
+.section-header h2 {
+  margin: 0;
+}
+
+.credit-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.75rem;
+  align-items: end;
+  margin-top: 1rem;
+}
+
+.credit-form h3 {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+/* A note under a figure, as a second dd, so it doesn't get the figure's large type. */
+.kpi dd.kpi-note-line {
+  margin-top: 0.3rem;
+  font-size: 0.8rem;
+  font-weight: 400;
+  letter-spacing: 0;
+}

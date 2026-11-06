@@ -329,7 +329,7 @@ const completeFinishedCampaigns = async (campaignIds: string[]): Promise<void> =
 
   await prisma.$executeRaw(Prisma.sql`
     UPDATE campaigns c
-    SET status = 'COMPLETED', updated_at = now()
+    SET status = 'COMPLETED', completed_at = now(), updated_at = now()
     FROM (
       SELECT m.campaign_id, SUM(m.impressions) AS delivered, SUM(m.cost_millicents) AS cost
       FROM metrics m
