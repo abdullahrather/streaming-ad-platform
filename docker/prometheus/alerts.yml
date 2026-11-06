@@ -1,0 +1,113 @@
+# What counts as a problem. Each alert's summary is what the platform admins read in the
+# email, so it says what is wrong and what it means for advertisers and viewers.
+groups:
+  - name: platform
+    rules:
+      - alert: ApiDown
+        expr: up{job="api"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: The API is not answering
+          description: >-
+            Prometheus can't reach the API. Ad breaks get no ads, players can't report views,
+            and the dashboard is down. This alert can't be emailed through the API itself, so
+            it shows in Alertmanager and Grafana.
+
+      - alert: DependencyDown
+        expr: dependency_up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: '{{ $labels.dependency }} is not answering'
+          description: >-
+            The API can't reach {{ $labels.dependency }}. Without Redis, ad decisions and event
+            intake fail; without Postgres, the dashboard, reports and billing fail.
+
+      - alert: HighErrorRate
+        expr: >-
+          sum(rate(http_request_duration_seconds_count{status=~"5.."}[5m]))
+          / sum(rate(http_request_duration_seconds_count[5m])) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: More than 5% of requests are failing
+          description: >-
+            {{ $value | humanizePercentage }} of requests ended in a server error over the last
+            5 minutes. The logs in Grafana show which routes.
+
+      - alert: SlowRequests
+        expr: >-
+          histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket[5m]))) > 1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Requests are slow
+          description: The slowest 5% of requests take over {{ $value | humanizeDuration }}.
+
+      - alert: AdBreaksGetNoAds
+        expr: >-
+          sum(rate(ad_decisions_total{result="served"}[10m])) == 0
+          and sum(rate(ad_decisions_total[10m])) > 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Ad breaks are getting no ads
+          description: >-
+            Players are asking for ads but none have been chosen for 10 minutes. Campaigns may
+            have run out of budget or approved ads, or targeting matches nothing.
+
+      - alert: EventBacklogGrowing
+        expr: event_queue_pending > 1000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Events are piling up before reaching the database
+          description: >-
+            {{ $value }} batches are waiting. Dashboard numbers lag behind what was delivered
+            until the worker catches up.
+
+      - alert: EventWorkerStalled
+        expr: event_queue_pending > 0 and time() - event_worker_last_batch_timestamp_seconds > 300
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: The event worker has stopped writing
+          description: >-
+            Events are waiting but none have been written for over 5 minutes. Nothing is lost,
+            since events stay queued, but the dashboard and pacing see no new delivery.
+
+      - alert: ScheduledTaskFailing
+        expr: increase(scheduler_task_failures_total[15m]) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: '{{ $labels.task }} is failing'
+          description: The scheduled task failed in the last 15 minutes. The logs say why.
+
+      - alert: BackupTooOld
+        expr: time() - backup_last_success_timestamp_seconds > 26 * 3600
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: No backup in over a day
+          description: The newest database backup is {{ $value | humanizeDuration }} old.
+
+      - alert: RestoreDrillFailed
+        # Only once a drill has run: before the first one there is nothing to report.
+        expr: backup_restore_drill_ok == 0 and backup_restore_drill_timestamp_seconds > 0
+        labels:
+          severity: critical
+        annotations:
+          summary: The last backup could not be restored correctly
+          description: >-
+            The restore drill restored the newest backup and its row counts didn't match. The
+            backups can't be trusted until this is fixed.
