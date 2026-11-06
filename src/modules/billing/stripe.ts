@@ -122,7 +122,16 @@ export const confirmCheckout = async (
   organisationId: string,
   sessionId: string,
 ): Promise<{ paid: boolean; entry: BalanceEntry | null }> => {
-  const session = await requireStripe().checkout.sessions.retrieve(sessionId);
+  let session: Stripe.Checkout.Session;
+  try {
+    session = await requireStripe().checkout.sessions.retrieve(sessionId);
+  } catch (error) {
+    // Stripe doesn't know that payment, such as a mistyped or made-up link.
+    if ((error as { statusCode?: number }).statusCode === 404) {
+      throw new AppError(404, 'Payment not found.');
+    }
+    throw error;
+  }
   if (session.metadata?.['organisationId'] !== organisationId) {
     throw new AppError(404, 'Payment not found.');
   }

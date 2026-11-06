@@ -484,6 +484,9 @@ describe('Card payments', () => {
     const someoneElses = await request(app)
       .post('/billing/checkout/cs_test_1/confirm')
       .set('Authorization', await login(other));
+    const madeUp = await request(app)
+      .post('/billing/checkout/cs_test_doesnotexist/confirm')
+      .set('Authorization', auth);
     setStripeClient(null);
     const off = await request(app)
       .post('/billing/checkout')
@@ -493,6 +496,8 @@ describe('Card payments', () => {
 
     expect(byManager.status).toBe(403);
     expect(someoneElses.status).toBe(404);
+    // Found by testing against Stripe's real test mode: an unknown session was a 500.
+    expect(madeUp.status).toBe(404);
     expect(off.status).toBe(503);
     expect(overview.body.data.cardPayments).toBe(false);
   });
