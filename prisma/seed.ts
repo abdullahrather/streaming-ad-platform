@@ -511,6 +511,14 @@ async function main(): Promise<void> {
   const brightline = await prisma.organisation.create({
     data: {
       name: 'Brightline Media',
+      // A German customer: invoices carry 19% VAT. All billing details are fictional.
+      plan: 'GROWTH',
+      billingName: 'Brightline Media GmbH',
+      addressLine1: 'Musterweg 12',
+      postalCode: '20095',
+      city: 'Hamburg',
+      country: 'DE',
+      vatId: 'DE000000001',
       memberships: {
         create: [
           { userId: owner.id, role: OrganisationRole.OWNER },
@@ -523,14 +531,23 @@ async function main(): Promise<void> {
   const casa = await prisma.organisation.create({
     data: {
       name: 'Casa Creative',
+      // An EU business with a confirmed VAT ID: the reverse charge, so no VAT on invoices.
+      plan: 'STARTER',
+      billingName: 'Casa Creative S.r.l.',
+      addressLine1: 'Via Esempio 7',
+      postalCode: '20121',
+      city: 'Milano',
+      country: 'IT',
+      vatId: 'IT00000000001',
+      vatIdVerifiedAt: new Date(),
       memberships: { create: { userId: rival.id, role: OrganisationRole.OWNER } },
     },
   });
   // Prepaid credit, paid in by bank transfer a month ago: enough for every demo
-  // campaign's budget, with room to start another.
-  for (const [organisation, advertiser] of [
-    [brightline, null],
-    [casa, 'Casa Mobili'],
+  // campaign's budget plus VAT where it applies, with room to start another.
+  for (const [organisation, advertiser, vat] of [
+    [brightline, null, 1.19],
+    [casa, 'Casa Mobili', 1],
   ] as const) {
     const budgets = CAMPAIGNS.filter((spec) =>
       advertiser ? spec.advertiser === advertiser : spec.advertiser !== 'Casa Mobili',
@@ -539,7 +556,7 @@ async function main(): Promise<void> {
       data: {
         organisationId: organisation.id,
         kind: 'CREDIT',
-        amountCents: Math.ceil((budgets + 5_000_000) / 100_000) * 100_000,
+        amountCents: Math.ceil((budgets * vat + 5_000_000) / 100_000) * 100_000,
         description: 'Bank transfer received',
         createdById: admin.id,
         createdAt: new Date(Date.now() - 31 * DAY),
@@ -549,6 +566,7 @@ async function main(): Promise<void> {
   await prisma.organisation.create({
     data: {
       name: 'Platform Team',
+      plan: 'ENTERPRISE',
       memberships: { create: { userId: admin.id, role: OrganisationRole.OWNER } },
     },
   });

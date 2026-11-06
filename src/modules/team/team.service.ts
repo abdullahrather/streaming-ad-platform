@@ -12,6 +12,7 @@ import { sendEmail } from '@/lib/mailer';
 import { prisma } from '@/lib/prisma';
 import { hashToken, randomToken } from '@/lib/security';
 import { AppError } from '@/middleware/errorHandler';
+import { assertWithinPlan } from '@/modules/billing/plans';
 import { BCRYPT_COST } from '@/modules/auth/auth.service';
 import type { AcceptInvitationDto, InviteDto } from './team.schema';
 
@@ -137,6 +138,12 @@ class TeamService {
 
   async invite(actor: Actor, dto: InviteDto): Promise<Invitation> {
     const organisationId = organisationOf(actor);
+    // Open invitations count as members, so the plan is checked when inviting. Inviting
+    // someone again replaces their open invitation, so that one isn't counted twice.
+    const reinvite = await prisma.invitation.count({
+      where: { organisationId, email: dto.email, acceptedAt: null, expiresAt: { gt: new Date() } },
+    });
+    await assertWithinPlan(organisationId, 'members', prisma, reinvite > 0);
 
     const existing = await prisma.membership.findFirst({
       where: { organisationId, user: { email: dto.email } },

@@ -12,6 +12,7 @@ import { localTimeAt } from '@/lib/platform-time';
 import { prisma } from '@/lib/prisma';
 import { dailyReachKeys, reachBetween, redis } from '@/lib/redis';
 import { AppError } from '@/middleware/errorHandler';
+import { assertWithinPlan } from '@/modules/billing/plans';
 import type { ReportColumn, ReportDefinition, SaveReportDto } from './reports.schema';
 
 const DAY_MS = 86_400_000;
@@ -277,6 +278,7 @@ export class ReportsService {
   async create(actor: Actor, dto: SaveReportDto, now = new Date()): Promise<Report> {
     if (!actor.organisationId) throw new AppError(409, 'Choose an organisation first.');
     await this.assertOwned(actor.organisationId, dto);
+    if (dto.schedule !== 'NONE') await assertWithinPlan(actor.organisationId, 'scheduledReports');
 
     return prisma.report.create({
       data: {
@@ -291,6 +293,10 @@ export class ReportsService {
   async update(id: string, actor: Actor, dto: SaveReportDto, now = new Date()): Promise<Report> {
     const report = await this.findOneOrFail(id, actor);
     await this.assertOwned(report.organisationId, dto);
+    // Scheduling a report that wasn't scheduled counts against the plan.
+    if (dto.schedule !== 'NONE' && report.schedule === 'NONE') {
+      await assertWithinPlan(report.organisationId, 'scheduledReports');
+    }
 
     return prisma.report.update({
       where: { id },

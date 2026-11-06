@@ -144,6 +144,22 @@ model Organisation {
   name        String
   suspendedAt DateTime? @map("suspended_at") @db.Timestamptz(3)
   createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  /// What it may use. Set by a platform admin.
+  plan        Plan      @default(STARTER)
+
+  // Billing details, printed on invoices. They decide the VAT.
+  billingName     String    @default("") @map("billing_name")
+  addressLine1    String    @default("") @map("address_line1")
+  addressLine2    String    @default("") @map("address_line2")
+  postalCode      String    @default("") @map("postal_code")
+  city            String    @default("")
+  /// ISO country code. Empty until billing details are filled in.
+  country         String    @default("") @db.VarChar(2)
+  vatId           String    @default("") @map("vat_id")
+  /// When the EU's VIES service confirmed the VAT ID. Reverse charge needs it.
+  vatIdVerifiedAt DateTime? @map("vat_id_verified_at") @db.Timestamptz(3)
+  /// The currency it pays and is invoiced in. Prices and the balance stay in euros.
+  currency        String    @default("EUR") @db.Char(3)
 
   memberships     Membership[]
   campaigns       Campaign[]
@@ -569,15 +585,20 @@ enum BalanceEntryKind {
 /// The prepaid balance, as an append-only ledger. The balance is the sum of amountCents:
 /// credits are positive, charges negative. Rows are never edited.
 model BalanceEntry {
-  id             String           @id @default(cuid())
-  organisationId String           @map("organisation_id")
-  kind           BalanceEntryKind
-  amountCents    Int              @map("amount_cents")
-  description    String
+  id              String           @id @default(cuid())
+  organisationId  String           @map("organisation_id")
+  kind            BalanceEntryKind
+  amountCents     Int              @map("amount_cents")
+  description     String
   /// The invoice a charge pays. One charge per invoice.
-  invoiceId      String?          @unique @map("invoice_id")
-  createdById    String?          @map("created_by_id")
-  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  invoiceId       String?          @unique @map("invoice_id")
+  /// A card payment through Stripe. Unique, so a payment is credited once.
+  stripeSessionId String?          @unique @map("stripe_session_id")
+  /// What was paid, in the currency it was paid in, before conversion to euros.
+  paidCents       Int?             @map("paid_cents")
+  paidCurrency    String?          @map("paid_currency") @db.Char(3)
+  createdById     String?          @map("created_by_id")
+  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
 
   organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
   // Checked at the end of the statement, so deleting an organisation removes both.
@@ -604,10 +625,27 @@ model Invoice {
   clicks           Int
   /// Events removed as invalid traffic. Never billed.
   filteredEvents   Int      @map("filtered_events")
+  /// Amounts in the invoice's currency.
   subtotalCents    Int      @map("subtotal_cents")
   taxCents         Int      @default(0) @map("tax_cents")
   totalCents       Int      @map("total_cents")
   currency         String   @default("EUR") @db.Char(3)
+  /// Euros per unit of currency: 1 EUR = exchangeRate units. 1 for euros.
+  exchangeRate     Decimal  @default(1) @map("exchange_rate") @db.Decimal(14, 6)
+  /// The same amounts in euros. The balance is charged eurTotalCents.
+  eurSubtotalCents Int      @default(0) @map("eur_subtotal_cents")
+  eurTaxCents      Int      @default(0) @map("eur_tax_cents")
+  eurTotalCents    Int      @default(0) @map("eur_total_cents")
+  /// VAT rate in basis points: 1900 is 19%.
+  vatRateBp        Int      @default(0) @map("vat_rate_bp")
+  /// Why the VAT is what it is, such as reverse charge.
+  vatNote          String   @default("") @map("vat_note")
+  /// Who bought and who sold, as they were when it was issued.
+  buyerAddress     String   @default("") @map("buyer_address")
+  buyerVatId       String   @default("") @map("buyer_vat_id")
+  sellerName       String   @default("") @map("seller_name")
+  sellerAddress    String   @default("") @map("seller_address")
+  sellerVatId      String   @default("") @map("seller_vat_id")
   issuedAt         DateTime @default(now()) @map("issued_at") @db.Timestamptz(3)
 
   organisation Organisation  @relation(fields: [organisationId], references: [id], onDelete: Cascade)
@@ -624,4 +662,20 @@ model InvoiceSequence {
   last Int
 
   @@map("invoice_sequences")
+}
+
+enum Plan {
+  STARTER
+  GROWTH
+  ENTERPRISE
+}
+
+/// The European Central Bank's daily reference rates: 1 EUR = rate units of currency.
+model ExchangeRate {
+  date     DateTime @db.Date
+  currency String   @db.Char(3)
+  rate     Decimal  @db.Decimal(14, 6)
+
+  @@id([date, currency])
+  @@map("exchange_rates")
 }
