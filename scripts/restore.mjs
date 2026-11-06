@@ -37,7 +37,10 @@ if (process.argv[1]?.endsWith('restore.mjs')) {
   const args = process.argv.slice(2);
   const intoAt = args.indexOf('--into');
   const into = intoAt >= 0 ? args[intoAt + 1] : null;
-  const named = args.find((arg, index) => !arg.startsWith('--') && index !== intoAt + 1);
+  // The file is the first argument that isn't a flag or the name after --into.
+  const named = args.find(
+    (arg, index) => !arg.startsWith('--') && (intoAt < 0 || index !== intoAt + 1),
+  );
   const file = !named || named === 'latest' ? readLatest()?.file : named;
   const live = databaseUrl().pathname.slice(1);
 

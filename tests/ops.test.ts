@@ -4,6 +4,7 @@
  * Operations: request IDs, Prometheus metrics, the checks made at scrape time, the
  * newest backup's age, and alerts from Alertmanager emailed to platform admins.
  */
+import { spawnSync } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -168,6 +169,21 @@ describe('Metrics', () => {
     } finally {
       settings['METRICS_TOKEN'] = '';
     }
+  });
+});
+
+describe('Restore script', () => {
+  it('restores the backup it was asked for, not the newest one', () => {
+    // An empty backup folder, so falling back to the newest backup finds nothing.
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'backups-'));
+    const run = spawnSync(process.execPath, ['scripts/restore.mjs', 'chosen.dump'], {
+      encoding: 'utf8',
+      env: { ...process.env, BACKUP_DIR: dir },
+    });
+
+    // Without --yes it stops before touching anything, saying what it would restore.
+    expect(run.status).toBe(1);
+    expect(run.stderr).toContain('with chosen.dump');
   });
 });
 
