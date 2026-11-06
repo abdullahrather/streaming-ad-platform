@@ -21,6 +21,7 @@ export default defineConfig({
         '/account',
         '/admin',
         '/ai',
+        '/billing',
         '/alerts',
         '/campaigns',
         '/click',

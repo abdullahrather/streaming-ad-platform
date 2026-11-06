@@ -3,6 +3,7 @@ import { AccountPage } from './account';
 import { AdminPage, MailboxPage } from './admin';
 import { AlertsPage } from './alerts';
 import { AssistantPage } from './assistant';
+import { BillingPage } from './billing';
 import { AudiencesPage } from './audiences';
 import { api, setExpiredHandler, type User } from './api';
 import { ComparePage } from './compare';
@@ -119,6 +120,8 @@ const App = () => {
   const isGuest = user.role === 'GUEST';
   const hasOrganisation = user.organisationId !== null;
   const seesActivity = user.organisationRole === 'OWNER' || user.organisationRole === 'MANAGER';
+  // Owners and managers pay for campaigns; admins add credit and see revenue.
+  const seesBilling = user.role === 'ADMIN' || (hasOrganisation && !isGuest && seesActivity);
   const campaignId = route.path.match(/^\/campaigns\/(.+)$/)?.[1];
   const reportId = route.path.match(/^\/reports\/(.+)$/)?.[1];
 
@@ -133,6 +136,9 @@ const App = () => {
     }
     if (route.path === '/compare') return <ComparePage key={user.organisationId} />;
     if (route.path === '/alerts') return <AlertsPage key={user.organisationId} />;
+    if (route.path === '/billing' && seesBilling) {
+      return <BillingPage key={user.organisationId} user={user} />;
+    }
     if (route.path === '/assistant') return <AssistantPage key={user.organisationId} user={user} />;
     if (route.path === '/team' && hasOrganisation && !isGuest) {
       return <TeamPage key={user.organisationId} user={user} onChanged={reloadUser} />;
@@ -161,6 +167,7 @@ const App = () => {
     { path: '/assistant', label: 'Assistant', show: true },
     { path: '/audiences', label: 'Audiences', show: hasOrganisation && !isGuest },
     { path: '/team', label: 'Team', show: hasOrganisation && !isGuest },
+    { path: '/billing', label: 'Billing', show: seesBilling },
     { path: '/activity', label: 'Activity', show: seesActivity },
     { path: '/account', label: 'Account', show: !isGuest },
     { path: '/admin', label: 'Admin', show: user.role === 'ADMIN' },

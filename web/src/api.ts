@@ -198,6 +198,76 @@ export interface AiStatus {
   source: 'env' | 'dashboard' | '';
 }
 
+export interface Reservation {
+  campaignId: string;
+  title: string;
+  budgetCents: number;
+  spentCents: number;
+  heldCents: number;
+}
+
+export interface BalanceAccount {
+  balanceCents: number;
+  heldCents: number;
+  availableCents: number;
+  reservations: Reservation[];
+}
+
+export interface BalanceEntry {
+  id: string;
+  kind: 'CREDIT' | 'CHARGE';
+  amountCents: number;
+  description: string;
+  createdAt: string;
+  invoiceId: string | null;
+}
+
+export interface Invoice {
+  id: string;
+  number: string;
+  campaignTitle: string;
+  advertiser: string;
+  periodStart: string;
+  periodEnd: string;
+  impressions: number;
+  totalCents: number;
+  currency: string;
+  issuedAt: string;
+}
+
+export interface BillingOverview extends BalanceAccount {
+  entries: BalanceEntry[];
+  invoices: Invoice[];
+}
+
+export interface OrganisationAccount extends BalanceAccount {
+  id: string;
+  name: string;
+  invoices: number;
+}
+
+export interface RevenueRow {
+  label: string;
+  genre?: string;
+  impressions: number;
+  revenueCents: number;
+  ecpmCents: number;
+}
+
+export interface Revenue {
+  from: string;
+  to: string;
+  impressions: number;
+  revenueCents: number;
+  invoicedCents: number;
+  invoiceCount: number;
+  creditsCents: number;
+  unbilledCents: number;
+  byShow: RevenueRow[];
+  byOrganisation: RevenueRow[];
+  bySlot: RevenueRow[];
+}
+
 export type AiProviderName = 'anthropic' | 'openai' | 'local';
 
 export interface AiSettingsInput {
@@ -681,4 +751,14 @@ export const api = {
     post<ModelDownload>('/ai/local/pull', { model, baseUrl }),
   modelDownload: (model: string) =>
     request<ModelDownload | null>(withSearch('/ai/local/pull', { model })),
+
+  billing: () => request<BillingOverview>('/billing'),
+  downloadInvoice: (id: string) => download(`/billing/invoices/${id}/pdf`),
+  billingOrganisations: () => request<OrganisationAccount[]>('/billing/organisations'),
+  addCredit: (organisationId: string, amountCents: number, description: string) =>
+    post<BalanceEntry>(`/billing/organisations/${organisationId}/credits`, {
+      amountCents,
+      description,
+    }),
+  revenue: (range: Range) => request<Revenue>(withRange('/billing/revenue', range)),
 };

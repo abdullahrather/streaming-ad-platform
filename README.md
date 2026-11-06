@@ -34,6 +34,10 @@ Built with Node.js, TypeScript, Express, Prisma, PostgreSQL, Redis and FFmpeg, w
 |---|
 | ![Turning the assistant on from the dashboard, with the local Ollama found and its model chosen](./docs/images/ai-settings.png) |
 
+| Prepaid billing | Publisher revenue |
+|---|---|
+| ![The balance, what running campaigns hold, and what is available](./docs/images/billing.png) | ![What the platform earned, by show and advertiser](./docs/images/revenue.png) |
+
 | Team management | Admin console |
 |---|---|
 | ![Team members, roles and invitations](./docs/images/team.png) | ![Users, organisations and platform activity](./docs/images/admin.png) |
@@ -164,6 +168,19 @@ See [how the AI assistant works](./docs/ai.md), including what it can see, how c
 
 Viewing profiles exist only for viewers who consented. They expire after 90 days, and a viewer can delete theirs at any time.
 
+### Billing
+
+Campaigns are paid from a prepaid balance, so the platform never delivers ads nobody has paid for.
+
+| Feature | What it does |
+|---|---|
+| **Prepaid balance** | Each organisation's money, kept as a ledger of credits and charges that is never edited |
+| **Holds** | A running campaign holds its unspent budget. Starting, resuming or raising a budget needs that much to be available |
+| **Invoices** | Each campaign is invoiced once, for what it really cost, about an hour after it ends. Numbered with no gaps, paid from the balance, and emailed as a PDF |
+| **Publisher revenue** | What the platform earned from the ads it showed, by show, advertiser and ad slot, with eCPM |
+
+Platform admins add credit, for example when a bank transfer arrives. Ad decisions never check the balance: budgets are already hard limits, and the balance covers every running budget. See [how billing works](./docs/billing.md).
+
 ### Accounts and teams
 
 Each company is an organisation with its own private campaigns and team. A person can belong to several and switch between them.
@@ -291,6 +308,9 @@ Dashboard routes need `Authorization: Bearer <token>` from login. Ad server rout
 | `POST` | `/ai/recommendations/:id/approve` | Apply a suggested change; also `/reject` |
 | `POST` | `/ai/draft-campaign` | Draft a campaign from a written brief |
 | | `/ai/settings`, `/ai/local/*` | Admin settings: provider, key, connection test, Ollama models and downloads |
+| `GET` | `/billing` | Your balance, what running campaigns hold, history and invoices |
+| `GET` | `/billing/invoices/:id/pdf` | Download an invoice |
+| | `/billing/organisations`, `/billing/revenue` | Admin: every balance, adding credit, and publisher revenue |
 | `GET` | `/shows` | The show catalogue |
 | `GET` | `/ad-decision` | Choose an ad: `showId`, `slot`, `country`, `device` |
 | `POST` | `/events` | Queue a batch of ad events, each with an `eventId` and `occurredAt` |
@@ -301,7 +321,7 @@ Dashboard routes need `Authorization: Bearer <token>` from login. Ad server rout
 prisma/          Database schema, migrations and demo data
 scripts/         Local database and dev startup
 src/lib/         Storage, video conversion, email, security
-src/modules/     account, admin, ai, alerts, audit, auth, campaigns, creatives, delivery, demo, dev,
+src/modules/     account, admin, ai, alerts, audit, auth, billing, campaigns, creatives, delivery, demo, dev,
                  docs, playback, reports, segments, shows, team
 src/middleware/  Sign-in and permission guards, API key guard, error handling
 tests/           Integration tests against a real PostgreSQL
@@ -351,6 +371,7 @@ This is a working demonstration, not a system that has run under real load.
 - `/ad-decision` and `/events` share one API key, which suits a trusted ad server.
 - Sign-ups, invitations, reports and alerts need `SMTP_URL` for real email; without it, messages stay in the local mailbox.
 - Reach is an estimate, usually within 1 to 2%, and alert thresholds are the same for every campaign. See [how reporting and alerts work](./docs/reporting.md#limits).
+- Billing is prepaid and in euros only, with no VAT or online payment yet; admins add credit by hand. See [the billing limits](./docs/billing.md#limits).
 - The AI assistant was tested end to end with a small local model, which answers "why is this campaign behind?" correctly but makes poor suggestions and drafts. Claude was tested only against a stand-in server, not the live API. See [the AI assistant's limits](./docs/ai.md#limits).
 
 ## Contributing

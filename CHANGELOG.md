@@ -6,6 +6,21 @@ The main changes in each version. Every release's full notes are on the [Release
 
 ### Added
 
+- Prepaid balances: a ledger of credits and charges for each organisation, shown on a new Billing page for owners and managers
+- Running campaigns hold their unspent budget; starting, resuming or raising a budget needs that much available, and is refused with 402 otherwise
+- One invoice per campaign once its delivery is final, numbered with no gaps, paid from the balance, emailed to owners and downloadable as a PDF
+- Publisher revenue for platform admins, by show, advertiser and ad slot, and adding credit to any organisation
+
+### Changed
+
+- Deleting a campaign invoices what it spent first
+- Pausing, resuming or deleting a campaign now shows the reason when it is refused
+- The AI section of the API docs says it can be turned on from the dashboard
+
+## 1.8.0
+
+### Added
+
 - AI settings on the Assistant page for platform admins: choose a provider, paste a key (stored encrypted, never shown again), test the connection, and turn the assistant on or off with no restart
 - For local models, the page finds Ollama, lists its models, and downloads new ones with a progress bar
 - Settings changes in the activity log
