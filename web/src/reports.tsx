@@ -14,34 +14,43 @@ import {
 import { formatDateTime } from './format';
 import { rangeFor } from './hooks';
 import { ErrorNote, firstError } from './ui';
+import { locale, t } from './i18n';
 
 const GROUPINGS: Array<[ReportGrouping, string]> = [
-  ['DAY', 'Day'],
-  ['CAMPAIGN', 'Campaign'],
-  ['SLOT', 'Ad slot'],
-  ['COUNTRY', 'Country'],
-  ['DEVICE', 'Device'],
-  ['SHOW', 'Show'],
+  ['DAY', t('Day')],
+  ['CAMPAIGN', t('Campaign')],
+  ['SLOT', t('Ad slot')],
+  ['COUNTRY', t('Country')],
+  ['DEVICE', t('Device')],
+  ['SHOW', t('Show')],
 ];
 
 const COLUMNS: Array<[string, string, number]> = [
-  ['impressions', 'Impressions', 0],
-  ['clicks', 'Clicks', 0],
-  ['ctr', 'CTR (%)', 2],
-  ['firstQuartileRate', 'Reached 25% (%)', 1],
-  ['midpointRate', 'Reached 50% (%)', 1],
-  ['thirdQuartileRate', 'Reached 75% (%)', 1],
-  ['completions', 'Completions', 0],
-  ['completionRate', 'Completion rate (%)', 1],
-  ['spend', 'Spend (€)', 2],
-  ['ecpm', 'eCPM (€)', 2],
-  ['reach', 'Reach', 0],
-  ['averageFrequency', 'Average frequency', 2],
+  ['impressions', t('Impressions'), 0],
+  ['clicks', t('Clicks'), 0],
+  ['ctr', t('CTR (%)'), 2],
+  ['firstQuartileRate', t('Reached 25% (%)'), 1],
+  ['midpointRate', t('Reached 50% (%)'), 1],
+  ['thirdQuartileRate', t('Reached 75% (%)'), 1],
+  ['completions', t('Completions'), 0],
+  ['completionRate', t('Completion rate (%)'), 1],
+  ['spend', t('Spend (€)'), 2],
+  ['ecpm', t('eCPM (€)'), 2],
+  ['reach', t('Reach'), 0],
+  ['averageFrequency', t('Average frequency'), 2],
 ];
 
 const CAMPAIGN_ONLY = ['reach', 'averageFrequency'];
 const RANGE_DAYS = [1, 7, 14, 30, 90];
-const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const WEEKDAYS = [
+  t('Sunday'),
+  t('Monday'),
+  t('Tuesday'),
+  t('Wednesday'),
+  t('Thursday'),
+  t('Friday'),
+  t('Saturday'),
+];
 
 const DEFAULT: ReportDefinition = {
   campaignIds: [],
@@ -52,7 +61,7 @@ const DEFAULT: ReportDefinition = {
 
 const format = (column: string, value: number | undefined): string => {
   const digits = COLUMNS.find(([id]) => id === column)?.[2] ?? 0;
-  return (value ?? 0).toLocaleString('en-GB', {
+  return (value ?? 0).toLocaleString(locale, {
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
   });
@@ -60,9 +69,10 @@ const format = (column: string, value: number | undefined): string => {
 
 const scheduleText = (report: SavedReport): string => {
   const hour = `${String(report.sendHour).padStart(2, '0')}:00`;
-  if (report.schedule === 'DAILY') return `Daily at ${hour}`;
-  if (report.schedule === 'WEEKLY') return `${WEEKDAYS[report.sendWeekday]}s at ${hour}`;
-  return 'Not scheduled';
+  if (report.schedule === 'DAILY') return t('Daily at {hour}', { hour });
+  if (report.schedule === 'WEEKLY')
+    return t('{weekday}s at {hour}', { weekday: WEEKDAYS[report.sendWeekday] ?? '', hour });
+  return t('Not scheduled');
 };
 
 const canManage = (user: User): boolean =>
@@ -75,7 +85,7 @@ const Preview = ({ result }: { result: ReportResult }) => {
   return (
     <div className="table-scroll">
       <table className="report-table">
-        <caption className="sr-only">Report preview</caption>
+        <caption className="sr-only">{t('Report preview')}</caption>
         <thead>
           <tr>
             <th scope="col">{groupLabel}</th>
@@ -90,7 +100,7 @@ const Preview = ({ result }: { result: ReportResult }) => {
           {result.rows.length === 0 ? (
             <tr>
               <td colSpan={columns.length + 1} className="empty">
-                No delivery in this period.
+                {t('No delivery in this period.')}
               </td>
             </tr>
           ) : (
@@ -108,7 +118,7 @@ const Preview = ({ result }: { result: ReportResult }) => {
         </tbody>
         <tfoot>
           <tr>
-            <th scope="row">Total</th>
+            <th scope="row">{t('Total')}</th>
             {columns.map(([id]) => (
               <td key={id} className="num">
                 {format(id, result.totals[id])}
@@ -123,9 +133,9 @@ const Preview = ({ result }: { result: ReportResult }) => {
 
 const SavedList = ({ reports, activeId }: { reports: SavedReport[]; activeId?: string }) => (
   <section className="card">
-    <h2>Saved reports</h2>
+    <h2>{t('Saved reports')}</h2>
     {reports.length === 0 ? (
-      <p className="empty">No saved reports yet.</p>
+      <p className="empty">{t('No saved reports yet.')}</p>
     ) : (
       <ul className="rows">
         {reports.map((report) => (
@@ -140,8 +150,12 @@ const SavedList = ({ reports, activeId }: { reports: SavedReport[]; activeId?: s
               <span className="muted small">
                 {' '}
                 · {scheduleText(report)}
-                {report.nextRunAt ? ` · next ${formatDateTime(report.nextRunAt)}` : ''}
-                {report.lastSentAt ? ` · last sent ${formatDateTime(report.lastSentAt)}` : ''}
+                {report.nextRunAt
+                  ? t(' · next {dateTime}', { dateTime: formatDateTime(report.nextRunAt) })
+                  : ''}
+                {report.lastSentAt
+                  ? t(' · last sent {dateTime}', { dateTime: formatDateTime(report.lastSentAt) })
+                  : ''}
               </span>
             </span>
           </li>
@@ -243,7 +257,7 @@ export const ReportsPage = ({ user, reportId }: { user: User; reportId?: string 
     const request = editing ? api.updateReport(editing.id, input) : api.saveReport(input);
     request
       .then((saved) => {
-        setNotice(editing ? 'Report updated.' : 'Report saved.');
+        setNotice(editing ? t('Report updated.') : t('Report saved.'));
         loadReports();
         window.location.hash = `#/reports/${saved.id}`;
       })
@@ -255,14 +269,17 @@ export const ReportsPage = ({ user, reportId }: { user: User; reportId?: string 
     api
       .sendReport(editing.id)
       .then(({ sentTo }) => {
-        setNotice(`Sent to ${sentTo} ${sentTo === 1 ? 'person' : 'people'}.`);
+        setNotice(
+          sentTo === 1 ? t('Sent to 1 person.') : t('Sent to {count} people.', { count: sentTo }),
+        );
         loadReports();
       })
       .catch(fail);
   };
 
   const remove = (): void => {
-    if (!editing || !window.confirm(`Delete the report “${editing.name}”?`)) return;
+    if (!editing || !window.confirm(t('Delete the report “{name}”?', { name: editing.name })))
+      return;
     api
       .deleteReport(editing.id)
       .then(() => {
@@ -280,15 +297,16 @@ export const ReportsPage = ({ user, reportId }: { user: User; reportId?: string 
     <>
       <header className="page-header">
         <div>
-          <h1>{editing ? editing.name : 'Reports'}</h1>
+          <h1>{editing ? editing.name : t('Reports')}</h1>
           <p className="muted">
-            Build a report, download it as CSV or PDF, and save it to have it emailed every day or
-            week.
+            {t(
+              'Build a report, download it as CSV or PDF, and save it to have it emailed every day or week.',
+            )}
           </p>
         </div>
         {editing && (
           <a className="button" href="#/reports">
-            New report
+            {t('New report')}
           </a>
         )}
       </header>
@@ -301,10 +319,10 @@ export const ReportsPage = ({ user, reportId }: { user: User; reportId?: string 
       )}
 
       <section className="card report-builder">
-        <h2>What to include</h2>
+        <h2>{t('What to include')}</h2>
         <div className="fields">
           <label>
-            Group rows by
+            {t('Group rows by')}
             <select
               value={definition.groupBy}
               onChange={(event) => update({ groupBy: event.target.value as ReportGrouping })}
@@ -317,14 +335,14 @@ export const ReportsPage = ({ user, reportId }: { user: User; reportId?: string 
             </select>
           </label>
           <label>
-            Period
+            {t('Period')}
             <select
               value={definition.rangeDays}
               onChange={(event) => update({ rangeDays: Number(event.target.value) })}
             >
               {RANGE_DAYS.map((days) => (
                 <option key={days} value={days}>
-                  Last {days === 1 ? 'day' : `${days} days`}
+                  {days === 1 ? t('Last day') : t('Last {days} days', { days })}
                 </option>
               ))}
             </select>
@@ -332,11 +350,11 @@ export const ReportsPage = ({ user, reportId }: { user: User; reportId?: string 
         </div>
 
         <fieldset className="checks">
-          <legend>Columns</legend>
+          <legend>{t('Columns')}</legend>
           {COLUMNS.map(([id, label]) => {
             const unavailable = CAMPAIGN_ONLY.includes(id) && definition.groupBy !== 'CAMPAIGN';
             return (
-              <label key={id} title={unavailable ? 'Group by campaign to use this' : undefined}>
+              <label key={id} title={unavailable ? t('Group by campaign to use this') : undefined}>
                 <input
                   type="checkbox"
                   checked={definition.columns.includes(id)}
@@ -350,14 +368,15 @@ export const ReportsPage = ({ user, reportId }: { user: User; reportId?: string 
         </fieldset>
         {definition.groupBy !== 'CAMPAIGN' && (
           <p className="muted small">
-            Reach and average frequency count unique viewers, which can't be added up across rows.
-            Group by campaign to include them.
+            {t(
+              "Reach and average frequency count unique viewers, which can't be added up across rows. Group by campaign to include them.",
+            )}
           </p>
         )}
 
         <fieldset className="checks compare-picker">
           <legend>
-            Campaigns{' '}
+            {t('Campaigns')}{' '}
             <span className="muted">
               ({definition.campaignIds.length === 0 ? 'all' : definition.campaignIds.length})
             </span>
@@ -379,25 +398,25 @@ export const ReportsPage = ({ user, reportId }: { user: User; reportId?: string 
 
       <section className="card">
         <div className="card-header">
-          <h2>Preview</h2>
+          <h2>{t('Preview')}</h2>
           <div className="toolbar">
             <button type="button" className="button" onClick={() => download('csv')}>
-              Download CSV
+              {t('Download CSV')}
             </button>
             <button type="button" className="button" onClick={() => download('pdf')}>
-              Download PDF
+              {t('Download PDF')}
             </button>
           </div>
         </div>
-        {result ? <Preview result={result} /> : <p className="empty">Loading…</p>}
+        {result ? <Preview result={result} /> : <p className="empty">{t('Loading…')}</p>}
       </section>
 
       {manages && (
         <section className="card">
-          <h2>{editing ? 'Schedule and recipients' : 'Save this report'}</h2>
+          <h2>{editing ? t('Schedule and recipients') : t('Save this report')}</h2>
           <div className="fields">
             <label className="wide">
-              Report name
+              {t('Report name')}
               <input
                 value={name}
                 onChange={(event) => setName(event.target.value)}
@@ -405,19 +424,19 @@ export const ReportsPage = ({ user, reportId }: { user: User; reportId?: string 
               />
             </label>
             <label>
-              Email it
+              {t('Email it')}
               <select
                 value={schedule}
                 onChange={(event) => setSchedule(event.target.value as ReportSchedule)}
               >
-                <option value="NONE">Not by email</option>
-                <option value="DAILY">Every day</option>
-                <option value="WEEKLY">Every week</option>
+                <option value="NONE">{t('Not by email')}</option>
+                <option value="DAILY">{t('Every day')}</option>
+                <option value="WEEKLY">{t('Every week')}</option>
               </select>
             </label>
             {schedule === 'WEEKLY' && (
               <label>
-                On
+                {t('On')}
                 <select
                   value={sendWeekday}
                   onChange={(event) => setSendWeekday(Number(event.target.value))}
@@ -432,7 +451,7 @@ export const ReportsPage = ({ user, reportId }: { user: User; reportId?: string 
             )}
             {schedule !== 'NONE' && (
               <label>
-                At
+                {t('At')}
                 <select
                   value={sendHour}
                   onChange={(event) => setSendHour(Number(event.target.value))}
@@ -448,7 +467,7 @@ export const ReportsPage = ({ user, reportId }: { user: User; reportId?: string 
           </div>
           {members.length > 0 && (
             <fieldset className="checks">
-              <legend>Send to</legend>
+              <legend>{t('Send to')}</legend>
               {members.map((member) => (
                 <label key={member.userId}>
                   <input
@@ -462,14 +481,15 @@ export const ReportsPage = ({ user, reportId }: { user: User; reportId?: string 
             </fieldset>
           )}
           <p className="muted small">
-            Times follow the platform time zone. Each email has the report attached as CSV and PDF,
-            with a short summary and any open alerts.
+            {t(
+              'Times follow the platform time zone. Each email has the report attached as CSV and PDF, with a short summary and any open alerts.',
+            )}
           </p>
           <div className="actions">
             {editing && (
               <>
                 <button type="button" className="button danger" onClick={remove}>
-                  Delete
+                  {t('Delete')}
                 </button>
                 <button
                   type="button"
@@ -477,12 +497,12 @@ export const ReportsPage = ({ user, reportId }: { user: User; reportId?: string 
                   onClick={sendNow}
                   disabled={editing.recipientIds.length === 0}
                 >
-                  Send now
+                  {t('Send now')}
                 </button>
               </>
             )}
             <button type="button" className="button primary" onClick={save}>
-              {editing ? 'Save changes' : 'Save report'}
+              {editing ? t('Save changes') : t('Save report')}
             </button>
           </div>
         </section>

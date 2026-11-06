@@ -1,3 +1,4 @@
+import { t } from './i18n';
 export type Status = 'ACTIVE' | 'PAUSED' | 'COMPLETED';
 export type Pacing = 'AHEAD' | 'ON_TRACK' | 'BEHIND' | 'NOT_STARTED' | 'FINISHED';
 export type OrganisationRole = 'OWNER' | 'MANAGER' | 'ANALYST';
@@ -580,7 +581,12 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
       token = '';
       onExpired();
     }
-    throw new ApiError(response.status, body.message ?? 'Request failed.', body.errors, body.code);
+    throw new ApiError(
+      response.status,
+      body.message ?? t('Request failed.'),
+      body.errors,
+      body.code,
+    );
   }
   return (body.meta ? { data: body.data, meta: body.meta } : body.data) as T;
 }
@@ -591,7 +597,7 @@ async function download(path: string, init: RequestInit = {}): Promise<void> {
   if (response.status === 401 && token && (await refreshToken())) response = await send(path, init);
   if (!response.ok) {
     const body = (await response.json().catch(() => ({}))) as { message?: string };
-    throw new ApiError(response.status, body.message ?? 'Download failed.');
+    throw new ApiError(response.status, body.message ?? t('Download failed.'));
   }
   const name =
     /filename="([^"]+)"/.exec(response.headers.get('content-disposition') ?? '')?.[1] ?? 'report';

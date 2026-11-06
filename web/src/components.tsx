@@ -9,21 +9,29 @@ import {
   YAxis,
 } from 'recharts';
 import type { Campaign, Pacing, PeriodTotals, Point, Row, Status, Totals } from './api';
-import { formatCompact, formatEuros, formatNumber, formatPercent, formatTick } from './format';
+import {
+  formatCompact,
+  formatDecimal,
+  formatEuros,
+  formatNumber,
+  formatPercent,
+  formatTick,
+} from './format';
 import { RANGES } from './hooks';
+import { language, locale, t } from './i18n';
 
 const PACING: Record<Pacing, { label: string; icon: string; tone: string }> = {
-  AHEAD: { label: 'Ahead', icon: '▲', tone: 'good' },
-  ON_TRACK: { label: 'On track', icon: '●', tone: 'good' },
-  BEHIND: { label: 'Behind', icon: '▼', tone: 'serious' },
-  NOT_STARTED: { label: 'Not started', icon: '○', tone: 'neutral' },
-  FINISHED: { label: 'Finished', icon: '■', tone: 'neutral' },
+  AHEAD: { label: t('Ahead'), icon: '▲', tone: 'good' },
+  ON_TRACK: { label: t('On track'), icon: '●', tone: 'good' },
+  BEHIND: { label: t('Behind'), icon: '▼', tone: 'serious' },
+  NOT_STARTED: { label: t('Not started'), icon: '○', tone: 'neutral' },
+  FINISHED: { label: t('Finished'), icon: '■', tone: 'neutral' },
 };
 
 const STATUS: Record<Status, { label: string; tone: string }> = {
-  ACTIVE: { label: 'Active', tone: 'good' },
-  PAUSED: { label: 'Paused', tone: 'warning' },
-  COMPLETED: { label: 'Completed', tone: 'neutral' },
+  ACTIVE: { label: t('Active'), tone: 'good' },
+  PAUSED: { label: t('Paused'), tone: 'warning' },
+  COMPLETED: { label: t('Completed'), tone: 'neutral' },
 };
 
 export const PacingBadge = ({ pacing }: { pacing: Pacing }) => {
@@ -47,7 +55,7 @@ export const RangePicker = ({
   value: string;
   onChange: (id: string) => void;
 }) => (
-  <div className="segmented" role="group" aria-label="Date range">
+  <div className="segmented" role="group" aria-label={t('Date range')}>
     {RANGES.map((range) => (
       <button
         key={range.id}
@@ -72,7 +80,7 @@ interface Change {
 const countChange = (current: number, previous: number, neutral = false): Change | null => {
   if (previous <= 0) return null;
   const change = (current - previous) / previous;
-  if (Math.abs(change) < 0.005) return { text: 'No change', direction: 'flat', neutral };
+  if (Math.abs(change) < 0.005) return { text: t('No change'), direction: 'flat', neutral };
   const sign = change > 0 ? '+' : '−';
   return {
     text: `${sign}${formatPercent(Math.abs(change), 0)}`,
@@ -85,23 +93,23 @@ const countChange = (current: number, previous: number, neutral = false): Change
 const rateChange = (current: number, previous: number, hadDelivery: boolean): Change | null => {
   if (!hadDelivery) return null;
   const points = (current - previous) * 100;
-  if (Math.abs(points) < 0.05) return { text: 'No change', direction: 'flat' };
+  if (Math.abs(points) < 0.05) return { text: t('No change'), direction: 'flat' };
   const sign = points > 0 ? '+' : '−';
   return {
-    text: `${sign}${Math.abs(points).toFixed(1)} pts`,
+    text: t('{sign}{toFixed} pts', { sign, toFixed: formatDecimal(Math.abs(points)) }),
     direction: points > 0 ? 'up' : 'down',
   };
 };
 
 /** A second description under the value, so the list stays a valid definition list. */
 const ChangeNote = ({ change, period }: { change: Change | null; period: string }) => {
-  if (!change) return <dd className="change muted">No earlier data</dd>;
+  if (!change) return <dd className="change muted">{t('No earlier data')}</dd>;
   const icon = { up: '▲', down: '▼', flat: '●' }[change.direction];
   const tone = change.neutral || change.direction === 'flat' ? 'flat' : change.direction;
   return (
     <dd className={`change change-${tone}`}>
       <span aria-hidden="true">{icon}</span> {change.text}{' '}
-      <span className="muted">vs {period}</span>
+      <span className="muted">{t('vs {period}', { period })}</span>
     </dd>
   );
 };
@@ -116,7 +124,7 @@ export const Kpis = ({
   totals,
   spendCents,
   previous,
-  period = 'previous period',
+  period = t('previous period'),
   extra = [],
 }: {
   totals: Totals;
@@ -129,29 +137,29 @@ export const Kpis = ({
   const hadDelivery = (previous?.impressions ?? 0) > 0;
   const items: Kpi[] = [
     {
-      label: 'Impressions',
+      label: t('Impressions'),
       value: formatCompact(totals.impressions),
       ...(previous ? { change: countChange(totals.impressions, previous.impressions) } : {}),
     },
     {
-      label: 'Clicks',
+      label: t('Clicks'),
       value: formatCompact(totals.clicks),
       ...(previous ? { change: countChange(totals.clicks, previous.clicks) } : {}),
     },
     {
-      label: 'Click-through rate',
+      label: t('Click-through rate'),
       value: formatPercent(totals.ctr, 2),
       ...(previous ? { change: rateChange(totals.ctr, previous.ctr, hadDelivery) } : {}),
     },
     {
-      label: 'Ads watched to the end',
+      label: t('Ads watched to the end'),
       value: formatPercent(totals.completionRate),
       ...(previous
         ? { change: rateChange(totals.completionRate, previous.completionRate, hadDelivery) }
         : {}),
     },
     {
-      label: 'Spend',
+      label: t('Spend'),
       value: formatEuros(spendCents),
       ...(previous ? { change: countChange(spendCents, previous.spendCents, true) } : {}),
     },
@@ -193,7 +201,7 @@ const TrendTooltip = ({
   unit: string;
 }) => {
   if (!active || !payload?.length || !label) return null;
-  const when = new Date(label).toLocaleString('en-GB', {
+  const when = new Date(label).toLocaleString(locale, {
     day: 'numeric',
     month: 'short',
     ...(hourly ? { hour: '2-digit', minute: '2-digit' } : {}),
@@ -279,15 +287,15 @@ const TrendTable = ({ points }: { points: Point[] }) => {
       <table>
         <thead>
           <tr>
-            <th scope="col">Time</th>
+            <th scope="col">{t('Time')}</th>
             <th scope="col" className="num">
-              Impressions
+              {t('Impressions')}
             </th>
             <th scope="col" className="num">
-              Clicks
+              {t('Clicks')}
             </th>
             <th scope="col" className="num">
-              CTR
+              {t('CTR')}
             </th>
           </tr>
         </thead>
@@ -311,19 +319,19 @@ export const Trends = ({ points }: { points: Point[] }) => {
   return (
     <section className="card">
       <header className="card-header">
-        <h2>Performance over time</h2>
+        <h2>{t('Performance over time')}</h2>
         <button type="button" className="link" onClick={() => setAsTable((value) => !value)}>
-          {asTable ? 'Show charts' : 'Show table'}
+          {asTable ? t('Show charts') : t('Show table')}
         </button>
       </header>
       {points.length === 0 ? (
-        <p className="empty">No delivery in this period.</p>
+        <p className="empty">{t('No delivery in this period.')}</p>
       ) : asTable ? (
         <TrendTable points={points} />
       ) : (
         <div className="charts">
-          <Trend title="Impressions" dataKey="impressions" points={points} />
-          <Trend title="Clicks" dataKey="clicks" points={points} />
+          <Trend title={t('Impressions')} dataKey="impressions" points={points} />
+          <Trend title={t('Clicks')} dataKey="clicks" points={points} />
         </div>
       )}
     </section>
@@ -345,7 +353,7 @@ export const Breakdown = ({
     <section className="card">
       <h2>{title}</h2>
       {rows.length === 0 ? (
-        <p className="empty">No delivery in this period.</p>
+        <p className="empty">{t('No delivery in this period.')}</p>
       ) : (
         <ul className="bars">
           {rows.map((row) => (
@@ -353,8 +361,11 @@ export const Breakdown = ({
               <div className="bar-label">
                 <span>{labels?.[row.key] ?? row.key}</span>
                 <span className="bar-value">
-                  {formatCompact(row.impressions)} · {formatPercent(row.ctr, 2)} CTR ·{' '}
-                  {formatPercent(row.completionRate, 0)} finished
+                  {t('{compact} · {percent} CTR · {percent2} finished', {
+                    compact: formatCompact(row.impressions),
+                    percent: formatPercent(row.ctr, 2),
+                    percent2: formatPercent(row.completionRate, 0),
+                  })}
                 </span>
               </div>
               <div className="bar-track">
@@ -375,7 +386,7 @@ const DROP_OFF_STAGES = [
   ['firstQuartiles', '25%'],
   ['midpoints', '50%'],
   ['thirdQuartiles', '75%'],
-  ['completions', 'End'],
+  ['completions', t('End')],
 ] as const;
 
 /** Where viewers stop watching, compared across slots, devices or shows. */
@@ -392,8 +403,8 @@ export const DropOffBySegment = ({
   return (
     <section className="card">
       <div className="card-header">
-        <h2>Where viewers stop watching</h2>
-        <div className="segmented" role="group" aria-label="Compare drop-off by">
+        <h2>{t('Where viewers stop watching')}</h2>
+        <div className="segmented" role="group" aria-label={t('Compare drop-off by')}>
           {groups.map((candidate) => (
             <button
               key={candidate.id}
@@ -407,18 +418,20 @@ export const DropOffBySegment = ({
         </div>
       </div>
       {rows.length === 0 ? (
-        <p className="empty">No delivery in this period.</p>
+        <p className="empty">{t('No delivery in this period.')}</p>
       ) : (
         <div className="table-scroll">
           <table>
             <caption className="sr-only">
-              Share of viewers still watching at each point, by {group.label.toLowerCase()}
+              {t('Share of viewers still watching at each point, by {group}', {
+                group: language === 'de' ? group.label : group.label.toLowerCase(),
+              })}
             </caption>
             <thead>
               <tr>
                 <th scope="col">{group.label}</th>
                 <th scope="col" className="num">
-                  Started
+                  {t('Started')}
                 </th>
                 {DROP_OFF_STAGES.map(([, label]) => (
                   <th key={label} scope="col" className="num">
@@ -453,22 +466,28 @@ export const ForecastComparison = ({ campaign, reach }: { campaign: Campaign; re
   if (forecastImpressions === null) return null;
 
   const rows = [
-    ['Impressions', lifetimeImpressions, forecastImpressions],
-    ['Reach', reach, forecastReach ?? 0],
+    [t('Impressions'), lifetimeImpressions, forecastImpressions],
+    [t('Reach'), reach, forecastReach ?? 0],
   ] as const;
 
   return (
     <section className="card">
-      <h2>Forecast against delivery</h2>
+      <h2>{t('Forecast against delivery')}</h2>
       {rows.map(([label, actual, expected]) => (
         <div key={label} className="goal">
           <div className="bar-label">
             <span>{label}</span>
             <span className="bar-value">
-              {formatNumber(actual)} of {formatNumber(expected)} forecast
+              {t('{number} of {number2} forecast', {
+                number: formatNumber(actual),
+                number2: formatNumber(expected),
+              })}
             </span>
           </div>
-          <Progress label={`${label} against forecast`} rate={expected ? actual / expected : 0} />
+          <Progress
+            label={t('{label} against forecast', { label })}
+            rate={expected ? actual / expected : 0}
+          />
         </div>
       ))}
     </section>
@@ -476,17 +495,17 @@ export const ForecastComparison = ({ campaign, reach }: { campaign: Campaign; re
 };
 
 const FILTER_REASONS: Record<string, string> = {
-  BOT_USER_AGENT: 'Bots and crawlers',
-  EXCESSIVE_REQUESTS: 'Too many requests from one viewer',
-  IMPOSSIBLE_TIMING: 'Finished impossibly fast',
+  BOT_USER_AGENT: t('Bots and crawlers'),
+  EXCESSIVE_REQUESTS: t('Too many requests from one viewer'),
+  IMPOSSIBLE_TIMING: t('Finished impossibly fast'),
 };
 
 /** Traffic that was rejected, so it was never counted or charged. */
 export const FilteredTraffic = ({ rows }: { rows: Array<{ reason: string; count: number }> }) =>
   rows.length === 0 ? null : (
     <section className="card">
-      <h2>Invalid traffic removed</h2>
-      <p className="muted small">Not counted in these results, and not charged.</p>
+      <h2>{t('Invalid traffic removed')}</h2>
+      <p className="muted small">{t('Not counted in these results, and not charged.')}</p>
       <ul className="rows">
         {rows.map(({ reason, count }) => (
           <li key={reason}>
@@ -501,18 +520,18 @@ export const FilteredTraffic = ({ rows }: { rows: Array<{ reason: string; count:
 /** How far viewers get through an ad, as a share of everyone who started it. */
 export const ViewerDropOff = ({ totals }: { totals: Totals }) => {
   const stages = [
-    ['Started', totals.impressions],
-    ['Reached 25%', totals.firstQuartiles],
-    ['Reached 50%', totals.midpoints],
-    ['Reached 75%', totals.thirdQuartiles],
-    ['Watched to the end', totals.completions],
+    [t('Started'), totals.impressions],
+    [t('Reached 25%'), totals.firstQuartiles],
+    [t('Reached 50%'), totals.midpoints],
+    [t('Reached 75%'), totals.thirdQuartiles],
+    [t('Watched to the end'), totals.completions],
   ] as const;
 
   return (
     <section className="card">
-      <h2>How far viewers watch</h2>
+      <h2>{t('How far viewers watch')}</h2>
       {totals.impressions === 0 ? (
-        <p className="empty">No delivery in this period.</p>
+        <p className="empty">{t('No delivery in this period.')}</p>
       ) : (
         <ul className="bars">
           {stages.map(([label, value]) => (

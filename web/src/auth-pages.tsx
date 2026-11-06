@@ -1,14 +1,15 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { api, ApiError, type InvitationPreview, type Options, type User } from './api';
 import { ROLE_NAMES } from './format';
-import { firstError } from './ui';
+import { LanguagePicker, firstError } from './ui';
+import { language, t } from './i18n';
 
 const GUEST = { email: 'guest@example.com', password: 'guest-demo' };
 const LOCAL_ACCOUNTS = [
-  { label: 'Owner', email: 'advertiser@example.com', password: 'advert1234' },
-  { label: 'Manager', email: 'manager@example.com', password: 'manager1234' },
-  { label: 'Analyst', email: 'analyst@example.com', password: 'analyst1234' },
-  { label: 'Admin', email: 'admin@example.com', password: 'admin1234' },
+  { label: t('Owner'), email: 'advertiser@example.com', password: 'advert1234' },
+  { label: t('Manager'), email: 'manager@example.com', password: 'manager1234' },
+  { label: t('Analyst'), email: 'analyst@example.com', password: 'analyst1234' },
+  { label: t('Admin'), email: 'admin@example.com', password: 'admin1234' },
 ];
 
 const Shell = ({
@@ -41,6 +42,7 @@ const Shell = ({
           {error}
         </p>
       )}
+      <LanguagePicker />
     </form>
   </main>
 );
@@ -76,7 +78,8 @@ const Field = ({
 const MailboxHint = ({ options }: { options: Options | null }) =>
   options?.localMailbox ? (
     <p className="hint">
-      No mail server is set up, so emails appear in the <a href="#/mailbox">local mailbox</a>.
+      {t('No mail server is set up, so emails appear in the')}{' '}
+      <a href="#/mailbox">{t('local mailbox')}</a>.
     </p>
   ) : null;
 
@@ -128,14 +131,14 @@ export const Login = ({ onLogin, notice }: { onLogin: (user: User) => void; noti
 
     return (
       <Shell
-        title="Two-factor login"
-        intro="Enter the code from your authenticator app, or a recovery code."
+        title={t('Two-factor login')}
+        intro={t('Enter the code from your authenticator app, or a recovery code.')}
         onSubmit={submitCode}
         error={error}
       >
-        <Field label="Code" value={code} onChange={setCode} autoComplete="one-time-code" />
+        <Field label={t('Code')} value={code} onChange={setCode} autoComplete="one-time-code" />
         <button type="submit" className="button primary">
-          Verify
+          {t('Verify')}
         </button>
       </Shell>
     );
@@ -143,25 +146,31 @@ export const Login = ({ onLogin, notice }: { onLogin: (user: User) => void; noti
 
   return (
     <Shell
-      title="Campaign Analytics"
-      intro="Plan, run and measure ads across a streaming catalogue."
-      notice={resent ? 'A new confirmation link is on its way.' : notice}
+      title={t('Campaign Analytics')}
+      intro={t('Plan, run and measure ads across a streaming catalogue.')}
+      notice={resent ? t('A new confirmation link is on its way.') : notice}
       error={error}
       onSubmit={(event) => {
         event.preventDefault();
         signIn(email, password);
       }}
     >
-      <Field label="Email" type="email" value={email} onChange={setEmail} autoComplete="username" />
       <Field
-        label="Password"
+        label={t('Email')}
+        type="email"
+        value={email}
+        onChange={setEmail}
+        autoComplete="username"
+      />
+      <Field
+        label={t('Password')}
         type="password"
         value={password}
         onChange={setPassword}
         autoComplete="current-password"
       />
       <button type="submit" className="button primary">
-        Sign in
+        {t('Sign in')}
       </button>
       {unverified && (
         <button
@@ -176,22 +185,22 @@ export const Login = ({ onLogin, notice }: { onLogin: (user: User) => void; noti
               .catch((reason: ApiError) => setError(firstError(reason)));
           }}
         >
-          Send the confirmation email again
+          {t('Send the confirmation email again')}
         </button>
       )}
       <div className="login-links">
-        <a href="#/forgot-password">Forgot password?</a>
-        {options?.signUp && <a href="#/register">Create an account</a>}
+        <a href="#/forgot-password">{t('Forgot password?')}</a>
+        {options?.signUp && <a href="#/register">{t('Create an account')}</a>}
       </div>
       <MailboxHint options={options} />
       <div className="demo-accounts">
-        <p className="hint">Demo accounts</p>
+        <p className="hint">{t('Demo accounts')}</p>
         <button
           type="button"
           className="button"
           onClick={() => signIn(GUEST.email, GUEST.password)}
         >
-          Explore as guest
+          {t('Explore as guest')}
         </button>
         {options &&
           !options.demo &&
@@ -221,17 +230,20 @@ export const Register = () => {
 
   if (done) {
     return (
-      <Shell title="Check your email" intro={`We sent a confirmation link to ${email}.`}>
+      <Shell
+        title={t('Check your email')}
+        intro={t('We sent a confirmation link to {email}.', { email })}
+      >
         <MailboxHint options={options} />
-        <a href="#/">Back to sign in</a>
+        <a href="#/">{t('Back to sign in')}</a>
       </Shell>
     );
   }
 
   return (
     <Shell
-      title="Create an account"
-      intro="Your company gets its own private workspace."
+      title={t('Create an account')}
+      intro={t('Your company gets its own private workspace.')}
       error={error}
       onSubmit={(event) => {
         event.preventDefault();
@@ -242,22 +254,22 @@ export const Register = () => {
           .catch((reason: ApiError) => setError(firstError(reason)));
       }}
     >
-      <Field label="Your name" value={name} onChange={setName} autoComplete="name" />
+      <Field label={t('Your name')} value={name} onChange={setName} autoComplete="name" />
       <Field
-        label="Company name"
+        label={t('Company name')}
         value={organisationName}
         onChange={setOrganisationName}
         autoComplete="organization"
       />
       <Field
-        label="Work email"
+        label={t('Work email')}
         type="email"
         value={email}
         onChange={setEmail}
         autoComplete="username"
       />
       <Field
-        label="Password (at least 10 characters)"
+        label={t('Password (at least 10 characters)')}
         type="password"
         value={password}
         onChange={setPassword}
@@ -265,9 +277,9 @@ export const Register = () => {
         minLength={10}
       />
       <button type="submit" className="button primary">
-        Create account
+        {t('Create account')}
       </button>
-      <a href="#/">Already have an account? Sign in</a>
+      <a href="#/">{t('Already have an account? Sign in')}</a>
     </Shell>
   );
 };
@@ -288,14 +300,14 @@ export const VerifyEmail = ({ token }: { token: string }) => {
   }, [token]);
 
   const copy = {
-    working: 'Confirming your email…',
-    done: 'Your email is confirmed. You can sign in now.',
-    failed: 'This link is invalid or has expired. Sign in to get a new one.',
+    working: t('Confirming your email…'),
+    done: t('Your email is confirmed. You can sign in now.'),
+    failed: t('This link is invalid or has expired. Sign in to get a new one.'),
   };
 
   return (
-    <Shell title="Email confirmation" intro={copy[state]}>
-      {state !== 'working' && <a href="#/">Go to sign in</a>}
+    <Shell title={t('Email confirmation')} intro={copy[state]}>
+      {state !== 'working' && <a href="#/">{t('Go to sign in')}</a>}
     </Shell>
   );
 };
@@ -308,9 +320,9 @@ export const ForgotPassword = () => {
 
   return (
     <Shell
-      title="Reset your password"
-      intro="We'll email you a link to choose a new one."
-      notice={sent ? 'If that account exists, a reset link is on its way.' : undefined}
+      title={t('Reset your password')}
+      intro={t("We'll email you a link to choose a new one.")}
+      notice={sent ? t('If that account exists, a reset link is on its way.') : undefined}
       error={error}
       onSubmit={(event) => {
         event.preventDefault();
@@ -321,12 +333,18 @@ export const ForgotPassword = () => {
           .catch((reason: ApiError) => setError(firstError(reason)));
       }}
     >
-      <Field label="Email" type="email" value={email} onChange={setEmail} autoComplete="username" />
+      <Field
+        label={t('Email')}
+        type="email"
+        value={email}
+        onChange={setEmail}
+        autoComplete="username"
+      />
       <button type="submit" className="button primary">
-        Send reset link
+        {t('Send reset link')}
       </button>
       {sent && <MailboxHint options={options} />}
-      <a href="#/">Back to sign in</a>
+      <a href="#/">{t('Back to sign in')}</a>
     </Shell>
   );
 };
@@ -338,15 +356,15 @@ export const ResetPassword = ({ token }: { token: string }) => {
 
   if (done) {
     return (
-      <Shell title="Password changed" intro="Every device has been signed out.">
-        <a href="#/">Go to sign in</a>
+      <Shell title={t('Password changed')} intro={t('Every device has been signed out.')}>
+        <a href="#/">{t('Go to sign in')}</a>
       </Shell>
     );
   }
 
   return (
     <Shell
-      title="Choose a new password"
+      title={t('Choose a new password')}
       error={error}
       onSubmit={(event) => {
         event.preventDefault();
@@ -358,7 +376,7 @@ export const ResetPassword = ({ token }: { token: string }) => {
       }}
     >
       <Field
-        label="New password (at least 10 characters)"
+        label={t('New password (at least 10 characters)')}
         type="password"
         value={password}
         onChange={setPassword}
@@ -366,7 +384,7 @@ export const ResetPassword = ({ token }: { token: string }) => {
         minLength={10}
       />
       <button type="submit" className="button primary">
-        Change password
+        {t('Change password')}
       </button>
     </Shell>
   );
@@ -395,26 +413,33 @@ export const AcceptInvitation = ({
 
   if (!preview) {
     return (
-      <Shell title="Invitation" error={error} intro={error ? undefined : 'Opening…'}>
-        {error && <a href="#/">Go to the dashboard</a>}
+      <Shell title={t('Invitation')} error={error} intro={error ? undefined : t('Opening…')}>
+        {error && <a href="#/">{t('Go to the dashboard')}</a>}
       </Shell>
     );
   }
 
-  const intro = `${preview.email} is invited to join ${preview.organisationName} as ${ROLE_NAMES[preview.role].toLowerCase()}.`;
+  const intro = t('{email} is invited to join {organisation} as {role}.', {
+    email: preview.email,
+    organisation: preview.organisationName,
+    // German nouns keep their capital letter.
+    role: language === 'de' ? ROLE_NAMES[preview.role] : ROLE_NAMES[preview.role].toLowerCase(),
+  });
 
   if (preview.hasAccount && user?.email !== preview.email) {
     return (
-      <Shell title="You're invited" intro={intro}>
-        <p className="muted">Sign in as {preview.email}, then open this invitation link again.</p>
-        <a href="#/">Go to sign in</a>
+      <Shell title={t("You're invited")} intro={intro}>
+        <p className="muted">
+          {t('Sign in as {email}, then open this invitation link again.', { email: preview.email })}
+        </p>
+        <a href="#/">{t('Go to sign in')}</a>
       </Shell>
     );
   }
 
   return (
     <Shell
-      title="You're invited"
+      title={t("You're invited")}
       intro={intro}
       error={error}
       onSubmit={(event) => {
@@ -428,9 +453,9 @@ export const AcceptInvitation = ({
     >
       {!preview.hasAccount && (
         <>
-          <Field label="Your name" value={name} onChange={setName} autoComplete="name" />
+          <Field label={t('Your name')} value={name} onChange={setName} autoComplete="name" />
           <Field
-            label="Password (at least 10 characters)"
+            label={t('Password (at least 10 characters)')}
             type="password"
             value={password}
             onChange={setPassword}
@@ -440,7 +465,7 @@ export const AcceptInvitation = ({
         </>
       )}
       <button type="submit" className="button primary">
-        Join {preview.organisationName}
+        {t('Join {organisationName}', { organisationName: preview.organisationName })}
       </button>
     </Shell>
   );

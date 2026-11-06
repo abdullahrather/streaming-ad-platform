@@ -12,22 +12,23 @@ import {
 } from './api';
 import { formatDate, formatDateTime, formatNumber } from './format';
 import { AuditTable, ErrorNote, Pager, firstError } from './ui';
+import { t } from './i18n';
 
 const Suspended = ({ at }: { at: string | null }) => (
   <span className={`badge ${at ? 'badge-serious' : 'badge-good'}`}>
-    {at ? 'Suspended' : 'Active'}
+    {at ? t('Suspended') : t('Active')}
   </span>
 );
 
 const Stats = ({ stats }: { stats: AdminStats }) => {
   const items = [
-    ['Users', stats.users],
-    ['Organisations', stats.organisations],
-    ['Campaigns', stats.campaigns],
-    ['Active sessions', stats.activeSessions],
-    ['Suspended users', stats.suspendedUsers],
-    ['Events waiting to save', stats.eventBacklog],
-    ['Invalid traffic, last 24 hours', stats.filteredLastDay],
+    [t('Users'), stats.users],
+    [t('Organisations'), stats.organisations],
+    [t('Campaigns'), stats.campaigns],
+    [t('Active sessions'), stats.activeSessions],
+    [t('Suspended users'), stats.suspendedUsers],
+    [t('Events waiting to save'), stats.eventBacklog],
+    [t('Invalid traffic, last 24 hours'), stats.filteredLastDay],
   ] as const;
 
   return (
@@ -91,9 +92,9 @@ const UsersCard = ({ self, onChanged }: { self: User; onChanged: () => void }) =
   return (
     <section className="card">
       <header className="card-header">
-        <h2>Users</h2>
+        <h2>{t('Users')}</h2>
         <Search
-          label="Search users"
+          label={t('Search users')}
           value={query}
           onChange={(value) => {
             setQuery(value);
@@ -108,15 +109,15 @@ const UsersCard = ({ self, onChanged }: { self: User; onChanged: () => void }) =
             <table>
               <thead>
                 <tr>
-                  <th scope="col">Person</th>
-                  <th scope="col">Status</th>
-                  <th scope="col">Email</th>
-                  <th scope="col">Two-factor</th>
+                  <th scope="col">{t('Person')}</th>
+                  <th scope="col">{t('Status')}</th>
+                  <th scope="col">{t('Email')}</th>
+                  <th scope="col">{t('Two-factor')}</th>
                   <th scope="col" className="num">
-                    Organisations
+                    {t('Organisations')}
                   </th>
                   <th scope="col">
-                    <span className="sr-only">Actions</span>
+                    <span className="sr-only">{t('Actions')}</span>
                   </th>
                 </tr>
               </thead>
@@ -130,8 +131,8 @@ const UsersCard = ({ self, onChanged }: { self: User; onChanged: () => void }) =
                     <td>
                       <Suspended at={user.suspendedAt} />
                     </td>
-                    <td>{user.emailVerifiedAt ? 'Confirmed' : 'Unconfirmed'}</td>
-                    <td>{user.twoFactorEnabledAt ? 'On' : 'Off'}</td>
+                    <td>{user.emailVerifiedAt ? t('Confirmed') : t('Unconfirmed')}</td>
+                    <td>{user.twoFactorEnabledAt ? t('On') : t('Off')}</td>
                     <td className="num">{user._count.memberships}</td>
                     <td className="actions-cell">
                       {user.id !== self.id && (
@@ -141,7 +142,7 @@ const UsersCard = ({ self, onChanged }: { self: User; onChanged: () => void }) =
                           aria-label={`${user.suspendedAt ? 'Restore' : 'Suspend'} ${user.email}`}
                           onClick={() => toggle(user)}
                         >
-                          {user.suspendedAt ? 'Restore' : 'Suspend'}
+                          {user.suspendedAt ? t('Restore') : t('Suspend')}
                         </button>
                       )}
                     </td>
@@ -186,9 +187,9 @@ const OrganisationsCard = ({ onChanged }: { onChanged: () => void }) => {
   return (
     <section className="card">
       <header className="card-header">
-        <h2>Organisations</h2>
+        <h2>{t('Organisations')}</h2>
         <Search
-          label="Search organisations"
+          label={t('Search organisations')}
           value={query}
           onChange={(value) => {
             setQuery(value);
@@ -203,17 +204,17 @@ const OrganisationsCard = ({ onChanged }: { onChanged: () => void }) => {
             <table>
               <thead>
                 <tr>
-                  <th scope="col">Name</th>
-                  <th scope="col">Status</th>
-                  <th scope="col">Created</th>
+                  <th scope="col">{t('Name')}</th>
+                  <th scope="col">{t('Status')}</th>
+                  <th scope="col">{t('Created')}</th>
                   <th scope="col" className="num">
-                    Members
+                    {t('Members')}
                   </th>
                   <th scope="col" className="num">
-                    Campaigns
+                    {t('Campaigns')}
                   </th>
                   <th scope="col">
-                    <span className="sr-only">Actions</span>
+                    <span className="sr-only">{t('Actions')}</span>
                   </th>
                 </tr>
               </thead>
@@ -234,7 +235,7 @@ const OrganisationsCard = ({ onChanged }: { onChanged: () => void }) => {
                         aria-label={`${organisation.suspendedAt ? 'Restore' : 'Suspend'} ${organisation.name}`}
                         onClick={() => toggle(organisation)}
                       >
-                        {organisation.suspendedAt ? 'Restore' : 'Suspend'}
+                        {organisation.suspendedAt ? t('Restore') : t('Suspend')}
                       </button>
                     </td>
                   </tr>
@@ -281,8 +282,8 @@ export const AdminPage = ({ user }: { user: User }) => {
     <>
       <header className="page-header">
         <div>
-          <h1>Admin console</h1>
-          <p className="muted">Everything across the platform.</p>
+          <h1>{t('Admin console')}</h1>
+          <p className="muted">{t('Everything across the platform.')}</p>
         </div>
       </header>
       <ErrorNote message={error} />
@@ -291,7 +292,7 @@ export const AdminPage = ({ user }: { user: User }) => {
       <OrganisationsCard onChanged={refresh} />
       {audit && (
         <section className="card">
-          <h2>Platform activity</h2>
+          <h2>{t('Platform activity')}</h2>
           <AuditTable entries={audit.data} />
           <Pager meta={audit.meta} onPage={setAuditPage} />
         </section>
@@ -320,28 +321,33 @@ export const MailboxPage = () => {
   return (
     <main className="page narrow">
       <a className="back" href="#/">
-        ← Back
+        {t('← Back')}
       </a>
       <header className="page-header">
         <div>
-          <h1>Local mailbox</h1>
+          <h1>{t('Local mailbox')}</h1>
           <p className="muted">
-            Emails land here because no mail server is set up. Set SMTP_URL to send real ones.
+            {t(
+              'Emails land here because no mail server is set up. Set SMTP_URL to send real ones.',
+            )}
           </p>
         </div>
       </header>
       <ErrorNote message={error} />
-      {emails?.length === 0 && <p className="empty card">No emails yet.</p>}
+      {emails?.length === 0 && <p className="empty card">{t('No emails yet.')}</p>}
       {emails?.map((email) => (
         <article key={email.id} className="card">
           <h2>{email.subject}</h2>
           <p className="muted small">
-            To {email.recipient} · {formatDateTime(email.createdAt)}
+            {t('To {recipient} · {dateTime}', {
+              recipient: email.recipient,
+              dateTime: formatDateTime(email.createdAt),
+            })}
           </p>
           <p className="mail-body">{email.body}</p>
-          {email.link && <a href={email.link}>Open link</a>}
+          {email.link && <a href={email.link}>{t('Open link')}</a>}
           {email.attachments.length > 0 && (
-            <ul className="attachments" aria-label="Attachments">
+            <ul className="attachments" aria-label={t('Attachments')}>
               {email.attachments.map((file) => (
                 <li key={file.filename}>
                   <a

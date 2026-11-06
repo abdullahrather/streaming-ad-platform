@@ -11,6 +11,7 @@ import {
 } from './api';
 import { ROLE_DESCRIPTIONS, ROLE_NAMES, formatDate } from './format';
 import { AuditTable, ErrorNote, Pager, firstError } from './ui';
+import { t } from './i18n';
 
 const ROLES: OrganisationRole[] = ['OWNER', 'MANAGER', 'ANALYST'];
 
@@ -78,7 +79,7 @@ export const TeamPage = ({ user, onChanged }: { user: User; onChanged: () => voi
     event.preventDefault();
     act(
       api.invite(email, role).then(() => setEmail('')),
-      `Invitation sent to ${email}.`,
+      t('Invitation sent to {email}.', { email }),
     );
   };
 
@@ -86,7 +87,7 @@ export const TeamPage = ({ user, onChanged }: { user: User; onChanged: () => voi
     <>
       <header className="page-header">
         <div>
-          <h1>Team</h1>
+          <h1>{t('Team')}</h1>
           <p className="muted">{organisation?.name}</p>
         </div>
       </header>
@@ -99,16 +100,16 @@ export const TeamPage = ({ user, onChanged }: { user: User; onChanged: () => voi
       )}
 
       <section className="card">
-        <h2>Members</h2>
+        <h2>{t('Members')}</h2>
         <div className="table-scroll">
           <table>
             <thead>
               <tr>
-                <th scope="col">Name</th>
-                <th scope="col">Role</th>
-                <th scope="col">Joined</th>
+                <th scope="col">{t('Name')}</th>
+                <th scope="col">{t('Role')}</th>
+                <th scope="col">{t('Joined')}</th>
                 <th scope="col">
-                  <span className="sr-only">Actions</span>
+                  <span className="sr-only">{t('Actions')}</span>
                 </th>
               </tr>
             </thead>
@@ -122,7 +123,7 @@ export const TeamPage = ({ user, onChanged }: { user: User; onChanged: () => voi
                   <td>
                     {isOwner ? (
                       <RoleSelect
-                        label={`Role for ${member.email}`}
+                        label={t('Role for {email}', { email: member.email })}
                         value={member.role}
                         onChange={(next) => act(api.changeRole(member.userId, next))}
                       />
@@ -137,12 +138,12 @@ export const TeamPage = ({ user, onChanged }: { user: User; onChanged: () => voi
                         type="button"
                         className="button"
                         onClick={() => {
-                          if (window.confirm('Leave this organisation?')) {
+                          if (window.confirm(t('Leave this organisation?'))) {
                             act(api.removeMember(member.userId).then(onChanged));
                           }
                         }}
                       >
-                        Leave
+                        {t('Leave')}
                       </button>
                     ) : (
                       isOwner && (
@@ -150,12 +151,12 @@ export const TeamPage = ({ user, onChanged }: { user: User; onChanged: () => voi
                           type="button"
                           className="button danger"
                           onClick={() => {
-                            if (window.confirm(`Remove ${member.email}?`)) {
+                            if (window.confirm(t('Remove {email}?', { email: member.email }))) {
                               act(api.removeMember(member.userId));
                             }
                           }}
                         >
-                          Remove
+                          {t('Remove')}
                         </button>
                       )
                     )}
@@ -169,10 +170,10 @@ export const TeamPage = ({ user, onChanged }: { user: User; onChanged: () => voi
 
       {isOwner && (
         <section className="card">
-          <h2>Invite someone</h2>
+          <h2>{t('Invite someone')}</h2>
           <form className="inline-form" onSubmit={invite}>
             <label>
-              Email
+              {t('Email')}
               <input
                 type="email"
                 value={email}
@@ -181,11 +182,11 @@ export const TeamPage = ({ user, onChanged }: { user: User; onChanged: () => voi
               />
             </label>
             <label>
-              Role
-              <RoleSelect label="Role" value={role} onChange={setRole} />
+              {t('Role')}
+              <RoleSelect label={t('Role')} value={role} onChange={setRole} />
             </label>
             <button type="submit" className="button primary">
-              Send invitation
+              {t('Send invitation')}
             </button>
           </form>
           <p className="hint">{ROLE_DESCRIPTIONS[role]}</p>
@@ -194,7 +195,7 @@ export const TeamPage = ({ user, onChanged }: { user: User; onChanged: () => voi
 
       {canSeeInvitations && invitations.length > 0 && (
         <section className="card">
-          <h2>Open invitations</h2>
+          <h2>{t('Open invitations')}</h2>
           <ul className="rows">
             {invitations.map((invitation) => (
               <li key={invitation.id}>
@@ -202,7 +203,10 @@ export const TeamPage = ({ user, onChanged }: { user: User; onChanged: () => voi
                   {invitation.email}
                   <span className="muted small">
                     {' '}
-                    · {ROLE_NAMES[invitation.role]} · expires {formatDate(invitation.expiresAt)}
+                    {t('· {value} · expires {date}', {
+                      value: ROLE_NAMES[invitation.role],
+                      date: formatDate(invitation.expiresAt),
+                    })}
                   </span>
                 </span>
                 {isOwner && (
@@ -211,7 +215,7 @@ export const TeamPage = ({ user, onChanged }: { user: User; onChanged: () => voi
                     className="button"
                     onClick={() => act(api.cancelInvitation(invitation.id))}
                   >
-                    Cancel
+                    {t('Cancel')}
                   </button>
                 )}
               </li>
@@ -239,8 +243,8 @@ export const ActivityPage = () => {
     <>
       <header className="page-header">
         <div>
-          <h1>Activity</h1>
-          <p className="muted">Who changed what in this organisation.</p>
+          <h1>{t('Activity')}</h1>
+          <p className="muted">{t('Who changed what in this organisation.')}</p>
         </div>
       </header>
       <ErrorNote message={error} />

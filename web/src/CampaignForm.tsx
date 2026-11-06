@@ -9,58 +9,61 @@ import {
   type Segment,
 } from './api';
 import { COUNTRY_LABELS, DEVICE_LABELS, SLOT_LABELS, formatNumber } from './format';
+import { locale, t } from './i18n';
 
 const DAYPARTS: Array<[string, string, number[]]> = [
-  ['night', 'Night (00-05)', [0, 1, 2, 3, 4, 5]],
-  ['morning', 'Morning (06-11)', [6, 7, 8, 9, 10, 11]],
-  ['afternoon', 'Afternoon (12-17)', [12, 13, 14, 15, 16, 17]],
-  ['evening', 'Evening (18-23)', [18, 19, 20, 21, 22, 23]],
+  ['night', t('Night (00-05)'), [0, 1, 2, 3, 4, 5]],
+  ['morning', t('Morning (06-11)'), [6, 7, 8, 9, 10, 11]],
+  ['afternoon', t('Afternoon (12-17)'), [12, 13, 14, 15, 16, 17]],
+  ['evening', t('Evening (18-23)'), [18, 19, 20, 21, 22, 23]],
 ];
 
 const WEEKDAYS: Array<[string, string]> = [
-  ['1', 'Mon'],
-  ['2', 'Tue'],
-  ['3', 'Wed'],
-  ['4', 'Thu'],
-  ['5', 'Fri'],
-  ['6', 'Sat'],
-  ['0', 'Sun'],
+  ['1', t('Mon')],
+  ['2', t('Tue')],
+  ['3', t('Wed')],
+  ['4', t('Thu')],
+  ['5', t('Fri')],
+  ['6', t('Sat')],
+  ['0', t('Sun')],
 ];
 
 const WARNINGS: Record<string, string> = {
-  NO_HISTORY: 'There is no traffic history for this targeting yet.',
-  BID_BELOW_FLOOR: 'This bid is under the auction minimum, so the campaign won’t deliver.',
-  NOT_ENOUGH_INVENTORY: 'There may not be enough matching traffic to reach the goal.',
-  BUDGET_BELOW_GOAL: 'This budget buys fewer impressions than the goal.',
-  LIMITS_BELOW_GOAL: 'Your daily limits or frequency cap are below what the goal needs.',
-  AUDIENCE_NEEDS_CONSENT: 'Audiences only include viewers who consented.',
+  NO_HISTORY: t('There is no traffic history for this targeting yet.'),
+  BID_BELOW_FLOOR: t('This bid is under the auction minimum, so the campaign won’t deliver.'),
+  NOT_ENOUGH_INVENTORY: t('There may not be enough matching traffic to reach the goal.'),
+  BUDGET_BELOW_GOAL: t('This budget buys fewer impressions than the goal.'),
+  LIMITS_BELOW_GOAL: t('Your daily limits or frequency cap are below what the goal needs.'),
+  AUDIENCE_NEEDS_CONSENT: t('Audiences only include viewers who consented.'),
 };
 
-const compact = new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 });
+const compact = new Intl.NumberFormat(locale, { notation: 'compact', maximumFractionDigits: 1 });
 
 const ForecastPanel = ({ forecast }: { forecast: Forecast | null }) => (
   <section className="forecast" aria-live="polite">
-    <h3>Forecast</h3>
+    <h3>{t('Forecast')}</h3>
     {forecast ? (
       <>
         <dl>
           <div>
-            <dt>Impressions</dt>
+            <dt>{t('Impressions')}</dt>
             <dd>
-              {compact.format(forecast.lowImpressions)} to{' '}
-              {compact.format(forecast.highImpressions)}
+              {t('{value} to {value2}', {
+                value: compact.format(forecast.lowImpressions),
+                value2: compact.format(forecast.highImpressions),
+              })}
             </dd>
           </div>
           <div>
-            <dt>Reach</dt>
-            <dd>{compact.format(forecast.expectedReach)} viewers</dd>
+            <dt>{t('Reach')}</dt>
+            <dd>{t('{value} viewers', { value: compact.format(forecast.expectedReach) })}</dd>
           </div>
           <div>
-            <dt>Average views</dt>
+            <dt>{t('Average views')}</dt>
             <dd>{forecast.averageFrequency}</dd>
           </div>
           <div>
-            <dt>Of your goal</dt>
+            <dt>{t('Of your goal')}</dt>
             <dd>{Math.round(forecast.goalDeliveryRate * 100)}%</dd>
           </div>
         </dl>
@@ -71,7 +74,7 @@ const ForecastPanel = ({ forecast }: { forecast: Forecast | null }) => (
         ))}
       </>
     ) : (
-      <p className="hint">Calculating…</p>
+      <p className="hint">{t('Calculating…')}</p>
     )}
   </section>
 );
@@ -234,12 +237,12 @@ const CampaignForm = ({
   return (
     <dialog ref={dialog} onClose={onClose} aria-labelledby="form-title">
       <form onSubmit={(event) => void submit(event)}>
-        <h2 id="form-title">{campaign ? 'Edit campaign' : 'New campaign'}</h2>
+        <h2 id="form-title">{campaign ? t('Edit campaign') : t('New campaign')}</h2>
         {draft && (
           <div className="notice">
             <p>
-              <strong>Drafted by the AI assistant from your brief.</strong> Check every field before
-              you create it.
+              <strong>{t('Drafted by the AI assistant from your brief.')}</strong>{' '}
+              {t('Check every field before you create it.')}
             </p>
             {draft.assumptions.length > 0 && (
               <ul className="small">
@@ -253,7 +256,7 @@ const CampaignForm = ({
 
         <div className="fields">
           <label className="wide">
-            Campaign name
+            {t('Campaign name')}
             <input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
@@ -262,7 +265,7 @@ const CampaignForm = ({
             />
           </label>
           <label className="wide">
-            Advertiser
+            {t('Advertiser')}
             <input
               value={advertiser}
               onChange={(e) => setAdvertiser(e.target.value)}
@@ -271,7 +274,7 @@ const CampaignForm = ({
             />
           </label>
           <label>
-            Budget (€)
+            {t('Budget (€)')}
             <input
               type="number"
               min="1"
@@ -282,7 +285,9 @@ const CampaignForm = ({
             />
           </label>
           <label>
-            {deliveryType === 'AUCTION' ? 'Highest bid' : 'CPM'} (€ per 1,000 impressions)
+            {deliveryType === 'AUCTION'
+              ? t('Highest bid (€ per 1,000 impressions)')
+              : t('CPM (€ per 1,000 impressions)')}
             <input
               type="number"
               min="0.01"
@@ -293,7 +298,7 @@ const CampaignForm = ({
             />
           </label>
           <label>
-            Starts
+            {t('Starts')}
             <input
               type="date"
               value={startsAt}
@@ -302,7 +307,7 @@ const CampaignForm = ({
             />
           </label>
           <label>
-            Ends
+            {t('Ends')}
             <input
               type="date"
               value={endsAt}
@@ -314,29 +319,29 @@ const CampaignForm = ({
 
         <div className="fields">
           <label>
-            How it's bought
+            {t("How it's bought")}
             <select
               value={deliveryType}
               onChange={(e) => setDeliveryType(e.target.value as CampaignInput['deliveryType'])}
             >
-              <option value="GUARANTEED">Guaranteed delivery</option>
-              <option value="AUCTION">Auction: bid for spare traffic</option>
+              <option value="GUARANTEED">{t('Guaranteed delivery')}</option>
+              <option value="AUCTION">{t('Auction: bid for spare traffic')}</option>
             </select>
           </label>
           <label>
-            Pacing
+            {t('Pacing')}
             <select
               value={pacingMode}
               onChange={(e) => setPacingMode(e.target.value as CampaignInput['pacingMode'])}
             >
-              <option value="EVEN">Even across the dates</option>
-              <option value="ASAP">As fast as possible</option>
-              <option value="CUSTOM">Daily target</option>
+              <option value="EVEN">{t('Even across the dates')}</option>
+              <option value="ASAP">{t('As fast as possible')}</option>
+              <option value="CUSTOM">{t('Daily target')}</option>
             </select>
           </label>
           {pacingMode === 'CUSTOM' && (
             <label>
-              Impressions per day
+              {t('Impressions per day')}
               <input
                 type="number"
                 min="1"
@@ -347,7 +352,7 @@ const CampaignForm = ({
             </label>
           )}
           <label>
-            Daily budget (€, optional)
+            {t('Daily budget (€, optional)')}
             <input
               type="number"
               min="1"
@@ -356,7 +361,7 @@ const CampaignForm = ({
             />
           </label>
           <label>
-            Most views per viewer per day (optional)
+            {t('Most views per viewer per day (optional)')}
             <input
               type="number"
               min="1"
@@ -366,55 +371,60 @@ const CampaignForm = ({
             />
           </label>
           <label>
-            Competitive category (optional)
+            {t('Competitive category (optional)')}
             <input
               value={category}
-              placeholder="For example, Automotive"
+              placeholder={t('For example, Automotive')}
               onChange={(e) => setCategory(e.target.value)}
             />
           </label>
         </div>
 
         <p className="hint">
-          This budget buys about <strong>{formatNumber(impressionGoal)}</strong> impressions. Leave
-          a targeting group empty to run everywhere.
+          {t('This budget buys about')} <strong>{formatNumber(impressionGoal)}</strong>{' '}
+          {t('impressions. Leave a targeting group empty to run everywhere.')}
         </p>
 
         <CheckGroup
-          legend="Ad slots"
+          legend={t('Ad slots')}
           options={Object.entries(SLOT_LABELS)}
           selected={slots}
           onChange={setSlots}
         />
         <CheckGroup
-          legend="Countries"
+          legend={t('Countries')}
           options={Object.entries(COUNTRY_LABELS)}
           selected={countries}
           onChange={setCountries}
         />
         <CheckGroup
-          legend="Devices"
+          legend={t('Devices')}
           options={Object.entries(DEVICE_LABELS)}
           selected={devices}
           onChange={setDevices}
         />
         <CheckGroup
-          legend="Times of day"
+          legend={t('Times of day')}
           options={DAYPARTS.map(([id, label]) => [id, label])}
           selected={dayparts}
           onChange={setDayparts}
         />
-        <CheckGroup legend="Days" options={WEEKDAYS} selected={weekdays} onChange={setWeekdays} />
+        <CheckGroup
+          legend={t('Days')}
+          options={WEEKDAYS}
+          selected={weekdays}
+          onChange={setWeekdays}
+        />
         {segments.length > 0 && (
           <CheckGroup
-            legend="Audiences"
+            legend={t('Audiences')}
             options={segments.map(({ id, name }) => [id, name])}
             selected={segmentIds}
             onChange={setSegmentIds}
           />
         )}
         <CheckGroup
-          legend="Show genres"
+          legend={t('Show genres')}
           options={allGenres.map((genre) => [genre, genre])}
           selected={genres}
           onChange={setGenres}
@@ -430,10 +440,10 @@ const CampaignForm = ({
 
         <div className="actions">
           <button type="button" className="button" onClick={onClose}>
-            Cancel
+            {t('Cancel')}
           </button>
           <button type="submit" className="button primary" disabled={saving}>
-            {saving ? 'Saving…' : campaign ? 'Save changes' : 'Create campaign'}
+            {saving ? t('Saving…') : campaign ? t('Save changes') : t('Create campaign')}
           </button>
         </div>
       </form>

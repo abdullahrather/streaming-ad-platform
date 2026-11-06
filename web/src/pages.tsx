@@ -28,29 +28,31 @@ import {
   formatEuros,
   formatNumber,
   formatPercent,
+  formatDecimal,
 } from './format';
 import { previousLabel, rangeFor, useLiveData } from './hooks';
 import { ErrorNote, firstError } from './ui';
+import { t } from './i18n';
 
 const CampaignTable = ({ campaigns, isAdmin }: { campaigns: Campaign[]; isAdmin: boolean }) => (
   <section className="card">
-    <h2>Campaigns</h2>
+    <h2>{t('Campaigns')}</h2>
     <div className="table-scroll">
       <table>
         <thead>
           <tr>
-            <th scope="col">Campaign</th>
-            <th scope="col">Status</th>
-            <th scope="col">Pacing</th>
-            <th scope="col">Delivered</th>
+            <th scope="col">{t('Campaign')}</th>
+            <th scope="col">{t('Status')}</th>
+            <th scope="col">{t('Pacing')}</th>
+            <th scope="col">{t('Delivered')}</th>
             <th scope="col" className="num">
-              Impressions
+              {t('Impressions')}
             </th>
             <th scope="col" className="num">
-              CTR
+              {t('CTR')}
             </th>
             <th scope="col" className="num">
-              Spent / budget
+              {t('Spent / budget')}
             </th>
           </tr>
         </thead>
@@ -71,7 +73,10 @@ const CampaignTable = ({ campaigns, isAdmin }: { campaigns: Campaign[]; isAdmin:
                 <PacingBadge pacing={campaign.pacing} />
               </td>
               <td className="delivery">
-                <Progress label={`${campaign.title} delivery`} rate={campaign.deliveryRate} />
+                <Progress
+                  label={t('{title} delivery', { title: campaign.title })}
+                  rate={campaign.deliveryRate}
+                />
                 <span className="muted small">{formatPercent(campaign.deliveryRate, 0)}</span>
               </td>
               <td className="num">{formatCompact(campaign.impressions)}</td>
@@ -111,16 +116,16 @@ export const Overview = ({ user, onOpen }: { user: User; onOpen: (id: string) =>
     <>
       <header className="page-header">
         <div>
-          <h1>Overview</h1>
+          <h1>{t('Overview')}</h1>
           <p className="muted live">
-            <span className="live-dot" aria-hidden="true" /> Updates every 5 seconds
+            <span className="live-dot" aria-hidden="true" /> {t('Updates every 5 seconds')}
           </p>
         </div>
         <div className="toolbar">
           <RangePicker value={rangeId} onChange={setRangeId} />
           {canEdit(user) && ai?.enabled && (
             <button type="button" className="button" onClick={() => setBriefing(true)}>
-              Draft from a brief
+              {t('Draft from a brief')}
             </button>
           )}
           {canEdit(user) && (
@@ -132,7 +137,7 @@ export const Overview = ({ user, onOpen }: { user: User; onOpen: (id: string) =>
                 setCreating(true);
               }}
             >
-              New campaign
+              {t('New campaign')}
             </button>
           )}
         </div>
@@ -155,13 +160,13 @@ export const Overview = ({ user, onOpen }: { user: User; onOpen: (id: string) =>
           ) : (
             <p className="empty card">
               {user.organisationId || user.role === 'GUEST'
-                ? 'No campaigns yet.'
-                : 'You are not in an organisation yet.'}
+                ? t('No campaigns yet.')
+                : t('You are not in an organisation yet.')}
             </p>
           )}
         </>
       ) : (
-        !error && <p className="empty">Loading…</p>
+        !error && <p className="empty">{t('Loading…')}</p>
       )}
 
       {briefing && (
@@ -191,20 +196,20 @@ export const Overview = ({ user, onOpen }: { user: User; onOpen: (id: string) =>
 };
 
 const list = (values: string[], labels?: Record<string, string>): string =>
-  values.length > 0 ? values.map((value) => labels?.[value] ?? value).join(', ') : 'All';
+  values.length > 0 ? values.map((value) => labels?.[value] ?? value).join(', ') : t('All');
 
 const Facts = ({ campaign }: { campaign: Campaign }) => {
   const facts = [
-    ['Flight', `${formatDate(campaign.startsAt)} – ${formatDate(campaign.endsAt)}`],
+    [t('Flight'), `${formatDate(campaign.startsAt)} – ${formatDate(campaign.endsAt)}`],
     ['CPM', formatCpm(campaign.cpmCents)],
-    ['Ad slots', list(campaign.targetSlots, SLOT_LABELS)],
-    ['Countries', list(campaign.targetCountries, COUNTRY_LABELS)],
-    ['Devices', list(campaign.targetDevices, DEVICE_LABELS)],
-    ['Show genres', list(campaign.targetGenres)],
+    [t('Ad slots'), list(campaign.targetSlots, SLOT_LABELS)],
+    [t('Countries'), list(campaign.targetCountries, COUNTRY_LABELS)],
+    [t('Devices'), list(campaign.targetDevices, DEVICE_LABELS)],
+    [t('Show genres'), list(campaign.targetGenres)],
   ];
   return (
     <section className="card">
-      <h2>Setup</h2>
+      <h2>{t('Setup')}</h2>
       <dl className="facts">
         {facts.map(([label, value]) => (
           <div key={label}>
@@ -219,24 +224,30 @@ const Facts = ({ campaign }: { campaign: Campaign }) => {
 
 const Delivery = ({ campaign }: { campaign: Campaign }) => (
   <section className="card">
-    <h2>Delivery</h2>
+    <h2>{t('Delivery')}</h2>
     <div className="goal">
       <div className="bar-label">
-        <span>Impressions</span>
+        <span>{t('Impressions')}</span>
         <span className="bar-value">
-          {formatNumber(campaign.lifetimeImpressions)} of {formatNumber(campaign.impressionGoal)}
+          {t('{number} of {number2}', {
+            number: formatNumber(campaign.lifetimeImpressions),
+            number2: formatNumber(campaign.impressionGoal),
+          })}
         </span>
       </div>
-      <Progress label="Impression goal" rate={campaign.deliveryRate} />
+      <Progress label={t('Impression goal')} rate={campaign.deliveryRate} />
     </div>
     <div className="goal">
       <div className="bar-label">
-        <span>Budget</span>
+        <span>{t('Budget')}</span>
         <span className="bar-value">
-          {formatEuros(campaign.lifetimeSpendCents)} of {formatEuros(campaign.budgetCents)}
+          {t('{euros} of {euros2}', {
+            euros: formatEuros(campaign.lifetimeSpendCents),
+            euros2: formatEuros(campaign.budgetCents),
+          })}
         </span>
       </div>
-      <Progress label="Budget used" rate={campaign.budgetUsedRate} />
+      <Progress label={t('Budget used')} rate={campaign.budgetUsedRate} />
     </div>
   </section>
 );
@@ -272,7 +283,11 @@ export const CampaignPage = ({
   };
 
   const remove = () => {
-    if (!campaign || !window.confirm(`Delete “${campaign.title}” and all its data?`)) return;
+    if (
+      !campaign ||
+      !window.confirm(t('Delete “{title}” and all its data?', { title: campaign.title }))
+    )
+      return;
     setActionError('');
     api.remove(id).then(onBack).catch(failed);
   };
@@ -280,7 +295,7 @@ export const CampaignPage = ({
   return (
     <>
       <a className="back" href="#/">
-        ← Overview
+        {t('← Overview')}
       </a>
       <ErrorNote message={error} />
       {campaign && data ? (
@@ -304,14 +319,14 @@ export const CampaignPage = ({
                       className="button"
                       onClick={() => setStatus(campaign.status === 'ACTIVE' ? 'PAUSED' : 'ACTIVE')}
                     >
-                      {campaign.status === 'ACTIVE' ? 'Pause' : 'Resume'}
+                      {campaign.status === 'ACTIVE' ? t('Pause') : t('Resume')}
                     </button>
                   )}
                   <button type="button" className="button" onClick={() => setEditing(true)}>
-                    Edit
+                    {t('Edit')}
                   </button>
                   <button type="button" className="button danger" onClick={remove}>
-                    Delete
+                    {t('Delete')}
                   </button>
                 </>
               )}
@@ -327,21 +342,22 @@ export const CampaignPage = ({
             period={previousLabel(rangeId)}
             extra={[
               {
-                label: 'Reach',
+                label: t('Reach'),
                 value: formatCompact(data.reach),
                 change: countChange(data.reach, data.previous.reach),
               },
               {
-                label: 'Average frequency',
-                value: data.averageFrequency ? `${data.averageFrequency.toFixed(1)}×` : '–',
+                label: t('Average frequency'),
+                value: data.averageFrequency ? `${formatDecimal(data.averageFrequency)}×` : '–',
                 // Seeing an ad more often isn't good or bad in itself, so it isn't coloured.
                 change: countChange(data.averageFrequency, data.previous.averageFrequency, true),
               },
             ]}
           />
           <p className="muted small kpi-note">
-            Reach counts each viewer once over the days in this period. Average frequency is
-            impressions per viewer. Both are estimates, usually within 1 to 2%.
+            {t(
+              'Reach counts each viewer once over the days in this period. Average frequency is impressions per viewer. Both are estimates, usually within 1 to 2%.',
+            )}
           </p>
           <div className="columns">
             <Delivery campaign={campaign} />
@@ -373,17 +389,26 @@ export const CampaignPage = ({
           <ViewerDropOff totals={campaign} />
           <DropOffBySegment
             groups={[
-              { id: 'slot', label: 'Ad slot', rows: data.breakdown.slot, labels: SLOT_LABELS },
-              { id: 'device', label: 'Device', rows: data.breakdown.device, labels: DEVICE_LABELS },
-              { id: 'show', label: 'Show', rows: data.breakdown.show },
+              { id: 'slot', label: t('Ad slot'), rows: data.breakdown.slot, labels: SLOT_LABELS },
+              {
+                id: 'device',
+                label: t('Device'),
+                rows: data.breakdown.device,
+                labels: DEVICE_LABELS,
+              },
+              { id: 'show', label: t('Show'), rows: data.breakdown.show },
             ]}
           />
           <FilteredTraffic rows={data.filtered} />
           <div className="columns">
-            <Breakdown title="By ad slot" rows={data.breakdown.slot} labels={SLOT_LABELS} />
-            <Breakdown title="By device" rows={data.breakdown.device} labels={DEVICE_LABELS} />
-            <Breakdown title="By country" rows={data.breakdown.country} labels={COUNTRY_LABELS} />
-            <Breakdown title="By show" rows={data.breakdown.show} />
+            <Breakdown title={t('By ad slot')} rows={data.breakdown.slot} labels={SLOT_LABELS} />
+            <Breakdown title={t('By device')} rows={data.breakdown.device} labels={DEVICE_LABELS} />
+            <Breakdown
+              title={t('By country')}
+              rows={data.breakdown.country}
+              labels={COUNTRY_LABELS}
+            />
+            <Breakdown title={t('By show')} rows={data.breakdown.show} />
           </div>
 
           {editing && (
@@ -398,7 +423,7 @@ export const CampaignPage = ({
           )}
         </>
       ) : (
-        !error && <p className="empty">Loading…</p>
+        !error && <p className="empty">{t('Loading…')}</p>
       )}
     </>
   );

@@ -17,9 +17,11 @@ import {
   formatNumber,
   formatPercent,
   formatTick,
+  formatDecimal,
 } from './format';
 import { rangeFor, useLiveData } from './hooks';
 import { ErrorNote } from './ui';
+import { t } from './i18n';
 
 const MAX = 4;
 const SLOTS = [1, 2, 3, 4];
@@ -59,24 +61,24 @@ type MetricRow = [
 ];
 
 const METRICS: MetricRow[] = [
-  ['Impressions', (row) => row.campaign.impressions, formatNumber],
-  ['Reach', (row) => row.reach, formatNumber],
+  [t('Impressions'), (row) => row.campaign.impressions, formatNumber],
+  [t('Reach'), (row) => row.reach, formatNumber],
   [
-    'Average frequency',
+    t('Average frequency'),
     (row) => row.averageFrequency,
-    (value) => (value ? `${value.toFixed(1)}×` : '–'),
+    (value) => (value ? `${formatDecimal(value)}×` : '–'),
   ],
-  ['Clicks', (row) => row.campaign.clicks, formatNumber],
-  ['Click-through rate', (row) => row.campaign.ctr, (value) => formatPercent(value, 2)],
-  ['Watched to the end', (row) => row.campaign.completionRate, (value) => formatPercent(value)],
-  ['Spend', (row) => row.campaign.spendCents, formatEuros],
+  [t('Clicks'), (row) => row.campaign.clicks, formatNumber],
+  [t('Click-through rate'), (row) => row.campaign.ctr, (value) => formatPercent(value, 2)],
+  [t('Watched to the end'), (row) => row.campaign.completionRate, (value) => formatPercent(value)],
+  [t('Spend'), (row) => row.campaign.spendCents, formatEuros],
   [
-    'Cost per 1,000 (eCPM)',
+    t('Cost per 1,000 (eCPM)'),
     (row) =>
       row.campaign.impressions ? (row.campaign.spendCents / row.campaign.impressions) * 1000 : 0,
     formatCpm,
   ],
-  ['Goal delivered', (row) => row.campaign.deliveryRate, (value) => formatPercent(value, 0)],
+  [t('Goal delivered'), (row) => row.campaign.deliveryRate, (value) => formatPercent(value, 0)],
 ];
 
 const CompareChart = ({ rows, slots }: { rows: Compared[]; slots: Map<string, number> }) => {
@@ -92,7 +94,7 @@ const CompareChart = ({ rows, slots }: { rows: Compared[]; slots: Map<string, nu
     return [...byTime.values()].sort((a, b) => String(a['time']).localeCompare(String(b['time'])));
   }, [rows]);
 
-  if (points.length === 0) return <p className="empty">No delivery in this period.</p>;
+  if (points.length === 0) return <p className="empty">{t('No delivery in this period.')}</p>;
 
   // A fixed, rounded top for the axis tells us where each line ends, so the end labels
   // can be spaced apart when two lines finish close together.
@@ -123,7 +125,7 @@ const CompareChart = ({ rows, slots }: { rows: Compared[]; slots: Map<string, nu
 
   return (
     <figure className="chart">
-      <figcaption>Impressions over time</figcaption>
+      <figcaption>{t('Impressions over time')}</figcaption>
       <ResponsiveContainer width="100%" height={CHART_HEIGHT}>
         <LineChart data={points} margin={{ top: PLOT_TOP, right: 96, bottom: 0, left: 0 }}>
           <CartesianGrid vertical={false} stroke="var(--grid)" />
@@ -255,8 +257,8 @@ export const ComparePage = () => {
     <>
       <header className="page-header">
         <div>
-          <h1>Compare campaigns</h1>
-          <p className="muted">Choose two to four campaigns to see them side by side.</p>
+          <h1>{t('Compare campaigns')}</h1>
+          <p className="muted">{t('Choose two to four campaigns to see them side by side.')}</p>
         </div>
         <div className="toolbar">
           <RangePicker value={rangeId} onChange={setRangeId} />
@@ -268,10 +270,10 @@ export const ComparePage = () => {
       <section className="card">
         <fieldset className="checks compare-picker">
           <legend>
-            Campaigns ({selected.length} of up to {MAX})
+            {t('Campaigns ({length} of up to {MAX})', { length: selected.length, MAX })}
           </legend>
-          {campaigns === null && !listError && <p className="empty">Loading…</p>}
-          {campaigns?.length === 0 && <p className="empty">No campaigns yet.</p>}
+          {campaigns === null && !listError && <p className="empty">{t('Loading…')}</p>}
+          {campaigns?.length === 0 && <p className="empty">{t('No campaigns yet.')}</p>}
           {campaigns?.map((campaign) => {
             const checked = selected.includes(campaign.id);
             return (
@@ -291,19 +293,19 @@ export const ComparePage = () => {
       </section>
 
       {selected.length < 2 ? (
-        <p className="empty card">Choose at least two campaigns.</p>
+        <p className="empty card">{t('Choose at least two campaigns.')}</p>
       ) : rows.length > 0 ? (
         <>
           <section className="card">
             <CompareChart rows={rows} slots={slots} />
           </section>
           <section className="card">
-            <h2>Side by side</h2>
+            <h2>{t('Side by side')}</h2>
             <div className="table-scroll">
               <table>
                 <thead>
                   <tr>
-                    <th scope="col">Measure</th>
+                    <th scope="col">{t('Measure')}</th>
                     {rows.map((row) => (
                       <th key={row.campaign.id} scope="col" className="num">
                         <Swatch slot={slots.get(row.campaign.id)} />{' '}
@@ -314,7 +316,7 @@ export const ComparePage = () => {
                 </thead>
                 <tbody>
                   <tr>
-                    <th scope="row">Pacing</th>
+                    <th scope="row">{t('Pacing')}</th>
                     {rows.map((row) => (
                       <td key={row.campaign.id} className="num">
                         <PacingBadge pacing={row.campaign.pacing} />
@@ -337,7 +339,7 @@ export const ComparePage = () => {
           </section>
         </>
       ) : (
-        !error && <p className="empty">Loading…</p>
+        !error && <p className="empty">{t('Loading…')}</p>
       )}
     </>
   );

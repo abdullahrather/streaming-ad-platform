@@ -1,5 +1,6 @@
 import type { ApiError, AuditEntry, Page } from './api';
 import { ROLE_NAMES, formatDateTime } from './format';
+import { LANGUAGES, language, setLanguage, t, type Language } from './i18n';
 
 export const firstError = (error: ApiError): string =>
   Object.values(error.fields ?? {}).flat()[0] ?? error.message;
@@ -19,17 +20,17 @@ export const Pager = ({
   onPage: (page: number) => void;
 }) =>
   meta.totalPages > 1 ? (
-    <nav className="pager" aria-label="Pages">
+    <nav className="pager" aria-label={t('Pages')}>
       <button
         type="button"
         className="button"
         disabled={meta.page <= 1}
         onClick={() => onPage(meta.page - 1)}
       >
-        Previous
+        {t('Previous')}
       </button>
       <span className="muted small">
-        Page {meta.page} of {meta.totalPages}
+        {t('Page {page} of {totalPages}', { page: meta.page, totalPages: meta.totalPages })}
       </span>
       <button
         type="button"
@@ -37,44 +38,44 @@ export const Pager = ({
         disabled={meta.page >= meta.totalPages}
         onClick={() => onPage(meta.page + 1)}
       >
-        Next
+        {t('Next')}
       </button>
     </nav>
   ) : null;
 
 const ACTION_LABELS: Record<string, string> = {
-  'account.email_verified': 'Confirmed their email',
-  'account.password_changed': 'Changed their password',
-  'account.password_reset': 'Reset their password',
-  'account.registered': 'Created an account',
-  'account.sessions_ended': 'Signed out other devices',
-  'account.two_factor_disabled': 'Turned off two-factor login',
-  'account.two_factor_enabled': 'Turned on two-factor login',
-  'admin.organisation_restored': 'Restored an organisation',
-  'admin.organisation_suspended': 'Suspended an organisation',
-  'admin.user_restored': 'Restored a user',
-  'admin.user_suspended': 'Suspended a user',
-  'auth.login': 'Signed in',
-  'auth.login_failed': 'Failed to sign in',
-  'auth.organisation_switched': 'Switched organisation',
-  'auth.recovery_code_used': 'Used a recovery code',
-  'auth.session_reuse_detected': 'Stolen session blocked',
-  'auth.two_factor_failed': 'Entered a wrong two-factor code',
-  'auth.two_factor_locked': 'Locked after too many wrong codes',
-  'campaign.created': 'Created a campaign',
-  'campaign.deleted': 'Deleted a campaign',
-  'campaign.updated': 'Changed a campaign',
-  'creative.approved': 'Approved an ad',
-  'creative.deleted': 'Deleted an ad',
-  'creative.rejected': 'Rejected an ad',
-  'creative.uploaded': 'Uploaded an ad',
-  'segment.created': 'Created an audience',
-  'invitation.accepted': 'Accepted an invitation',
-  'invitation.revoked': 'Cancelled an invitation',
-  'member.invited': 'Invited a member',
-  'member.removed': 'Removed a member',
-  'member.role_changed': 'Changed a member’s role',
-  'organisation.created': 'Created an organisation',
+  'account.email_verified': t('Confirmed their email'),
+  'account.password_changed': t('Changed their password'),
+  'account.password_reset': t('Reset their password'),
+  'account.registered': t('Created an account'),
+  'account.sessions_ended': t('Signed out other devices'),
+  'account.two_factor_disabled': t('Turned off two-factor login'),
+  'account.two_factor_enabled': t('Turned on two-factor login'),
+  'admin.organisation_restored': t('Restored an organisation'),
+  'admin.organisation_suspended': t('Suspended an organisation'),
+  'admin.user_restored': t('Restored a user'),
+  'admin.user_suspended': t('Suspended a user'),
+  'auth.login': t('Signed in'),
+  'auth.login_failed': t('Failed to sign in'),
+  'auth.organisation_switched': t('Switched organisation'),
+  'auth.recovery_code_used': t('Used a recovery code'),
+  'auth.session_reuse_detected': t('Stolen session blocked'),
+  'auth.two_factor_failed': t('Entered a wrong two-factor code'),
+  'auth.two_factor_locked': t('Locked after too many wrong codes'),
+  'campaign.created': t('Created a campaign'),
+  'campaign.deleted': t('Deleted a campaign'),
+  'campaign.updated': t('Changed a campaign'),
+  'creative.approved': t('Approved an ad'),
+  'creative.deleted': t('Deleted an ad'),
+  'creative.rejected': t('Rejected an ad'),
+  'creative.uploaded': t('Uploaded an ad'),
+  'segment.created': t('Created an audience'),
+  'invitation.accepted': t('Accepted an invitation'),
+  'invitation.revoked': t('Cancelled an invitation'),
+  'member.invited': t('Invited a member'),
+  'member.removed': t('Removed a member'),
+  'member.role_changed': t('Changed a member’s role'),
+  'organisation.created': t('Created an organisation'),
 };
 
 const describeDetails = (details: Record<string, unknown>): string => {
@@ -85,23 +86,23 @@ const describeDetails = (details: Record<string, unknown>): string => {
 
 export const AuditTable = ({ entries }: { entries: AuditEntry[] }) =>
   entries.length === 0 ? (
-    <p className="empty">Nothing recorded yet.</p>
+    <p className="empty">{t('Nothing recorded yet.')}</p>
   ) : (
     <div className="table-scroll">
       <table>
         <thead>
           <tr>
-            <th scope="col">When</th>
-            <th scope="col">Who</th>
-            <th scope="col">What</th>
-            <th scope="col">Details</th>
+            <th scope="col">{t('When')}</th>
+            <th scope="col">{t('Who')}</th>
+            <th scope="col">{t('What')}</th>
+            <th scope="col">{t('Details')}</th>
           </tr>
         </thead>
         <tbody>
           {entries.map((entry) => (
             <tr key={entry.id}>
               <td className="nowrap">{formatDateTime(entry.createdAt)}</td>
-              <td>{entry.actorEmail || 'System'}</td>
+              <td>{entry.actorEmail || t('System')}</td>
               <td>{ACTION_LABELS[entry.action] ?? entry.action}</td>
               <td className="muted">{describeDetails(entry.details)}</td>
             </tr>
@@ -110,3 +111,17 @@ export const AuditTable = ({ entries }: { entries: AuditEntry[] }) =>
       </table>
     </div>
   );
+
+/** Switches the dashboard between English and German. */
+export const LanguagePicker = () => (
+  <label className="language-picker">
+    <span className="sr-only">{t('Language')}</span>
+    <select value={language} onChange={(event) => setLanguage(event.target.value as Language)}>
+      {Object.entries(LANGUAGES).map(([code, name]) => (
+        <option key={code} value={code} lang={code}>
+          {name}
+        </option>
+      ))}
+    </select>
+  </label>
+);
