@@ -18,9 +18,11 @@ import {
 } from './auth-pages';
 import { ROLE_NAMES } from './format';
 import { useTheme } from './hooks';
+import { LanguagePicker } from './ui';
 import { CampaignPage, Overview } from './pages';
 import { ReportsPage } from './reports';
 import { ActivityPage, TeamPage } from './team';
+import { t } from './i18n';
 
 interface Route {
   path: string;
@@ -37,9 +39,9 @@ const go = (path: string): void => {
 };
 
 const roleLabel = (user: User): string => {
-  if (user.role === 'ADMIN') return 'Platform admin';
-  if (user.role === 'GUEST') return 'Guest';
-  return user.organisationRole ? ROLE_NAMES[user.organisationRole] : 'No organisation';
+  if (user.role === 'ADMIN') return t('Platform admin');
+  if (user.role === 'GUEST') return t('Guest');
+  return user.organisationRole ? ROLE_NAMES[user.organisationRole] : t('No organisation');
 };
 
 const App = () => {
@@ -79,7 +81,7 @@ const App = () => {
 
   useEffect(() => {
     setExpiredHandler(() => {
-      setNotice('You were signed out. Please sign in again.');
+      setNotice(t('You were signed out. Please sign in again.'));
       setUser(null);
     });
   }, []);
@@ -95,7 +97,7 @@ const App = () => {
         token={route.token}
         user={user}
         onJoined={() => {
-          setNotice('You joined the organisation. Sign in to continue.');
+          setNotice(t('You joined the organisation. Sign in to continue.'));
           if (user) reloadUser();
           go('/');
         }}
@@ -160,18 +162,18 @@ const App = () => {
   })();
 
   const links = [
-    { path: '/', label: 'Overview', show: true },
-    { path: '/compare', label: 'Compare', show: true },
-    { path: '/reports', label: 'Reports', show: true },
-    { path: '/alerts', label: 'Alerts', show: true },
-    { path: '/assistant', label: 'Assistant', show: true },
-    { path: '/audiences', label: 'Audiences', show: hasOrganisation && !isGuest },
-    { path: '/team', label: 'Team', show: hasOrganisation && !isGuest },
-    { path: '/billing', label: 'Billing', show: seesBilling },
-    { path: '/activity', label: 'Activity', show: seesActivity },
-    { path: '/account', label: 'Account', show: !isGuest },
-    { path: '/admin', label: 'Admin', show: user.role === 'ADMIN' },
-    { path: '/review', label: 'Ad review', show: user.role === 'ADMIN' },
+    { path: '/', label: t('Overview'), show: true },
+    { path: '/compare', label: t('Compare'), show: true },
+    { path: '/reports', label: t('Reports'), show: true },
+    { path: '/alerts', label: t('Alerts'), show: true },
+    { path: '/assistant', label: t('Assistant'), show: true },
+    { path: '/audiences', label: t('Audiences'), show: hasOrganisation && !isGuest },
+    { path: '/team', label: t('Team'), show: hasOrganisation && !isGuest },
+    { path: '/billing', label: t('Billing'), show: seesBilling },
+    { path: '/activity', label: t('Activity'), show: seesActivity },
+    { path: '/account', label: t('Account'), show: !isGuest },
+    { path: '/admin', label: t('Admin'), show: user.role === 'ADMIN' },
+    { path: '/review', label: t('Ad review'), show: user.role === 'ADMIN' },
   ].filter((link) => link.show);
 
   const isCurrent = (path: string): boolean =>
@@ -181,10 +183,10 @@ const App = () => {
 
   return (
     <>
-      <nav className="topbar" aria-label="Main">
+      <nav className="topbar" aria-label={t('Main')}>
         <div className="topbar-group">
           <a href="#/" className="brand">
-            Campaign Analytics
+            {t('Campaign Analytics')}
           </a>
           {links.map((link) => (
             <a
@@ -200,7 +202,7 @@ const App = () => {
         <div className="topbar-actions">
           {user.organisations.length > 1 ? (
             <select
-              aria-label="Organisation"
+              aria-label={t('Organisation')}
               value={user.organisationId ?? ''}
               onChange={(event) => {
                 void api.switchOrganisation(event.target.value).then(() => {
@@ -220,22 +222,25 @@ const App = () => {
           )}
           <span className="muted small who">{roleLabel(user)}</span>
           <a className="button" href="/watch">
-            Demo site
+            {t('Demo site')}
           </a>
           <a className="button" href="/docs">
-            API docs
+            {t('API docs')}
           </a>
+          <LanguagePicker />
           <button type="button" className="button" onClick={toggle}>
-            {theme === 'dark' ? 'Light theme' : 'Dark theme'}
+            {theme === 'dark' ? t('Light theme') : t('Dark theme')}
           </button>
           <button type="button" className="button" onClick={signOut}>
-            Sign out
+            {t('Sign out')}
           </button>
         </div>
       </nav>
       <main className="page">
         {isGuest && (
-          <p className="notice">Read-only demo. All brands, shows and traffic are fictional.</p>
+          <p className="notice">
+            {t('Read-only demo. All brands, shows and traffic are fictional.')}
+          </p>
         )}
         {page}
       </main>

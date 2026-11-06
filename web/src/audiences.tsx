@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { api, ApiError, type Segment, type User } from './api';
 import { ErrorNote, firstError } from './ui';
+import { t } from './i18n';
 
 export const AudiencesPage = ({ user }: { user: User }) => {
   const canEdit = user.organisationRole === 'OWNER' || user.organisationRole === 'MANAGER';
@@ -42,9 +43,11 @@ export const AudiencesPage = ({ user }: { user: User }) => {
     <>
       <header className="page-header">
         <div>
-          <h1>Audiences</h1>
+          <h1>{t('Audiences')}</h1>
           <p className="muted">
-            Groups of viewers by what they watch. Only viewers who consented are ever included.
+            {t(
+              'Groups of viewers by what they watch. Only viewers who consented are ever included.',
+            )}
           </p>
         </div>
       </header>
@@ -52,8 +55,8 @@ export const AudiencesPage = ({ user }: { user: User }) => {
       <ErrorNote message={error} />
 
       <section className="card">
-        <h2>Your audiences</h2>
-        {segments?.length === 0 && <p className="muted">No audiences yet.</p>}
+        <h2>{t('Your audiences')}</h2>
+        {segments?.length === 0 && <p className="muted">{t('No audiences yet.')}</p>}
         <ul className="rows">
           {segments?.map((segment) => (
             <li key={segment.id}>
@@ -61,19 +64,22 @@ export const AudiencesPage = ({ user }: { user: User }) => {
                 {segment.name}
                 <span className="muted small">
                   {' '}
-                  · {segment.genres.join(', ')} · {segment.minViews}+ views
+                  {t('· {join} · {minViews}+ views', {
+                    join: segment.genres.join(', '),
+                    minViews: segment.minViews,
+                  })}
                 </span>
               </span>
               {canEdit && (
                 <button
                   type="button"
                   className="button"
-                  aria-label={`Delete ${segment.name}`}
+                  aria-label={t('Delete {name}', { name: segment.name })}
                   onClick={() => {
                     api.deleteSegment(segment.id).then(load).catch(fail);
                   }}
                 >
-                  Delete
+                  {t('Delete')}
                 </button>
               )}
             </li>
@@ -83,11 +89,11 @@ export const AudiencesPage = ({ user }: { user: User }) => {
 
       {canEdit && (
         <section className="card">
-          <h2>New audience</h2>
+          <h2>{t('New audience')}</h2>
           <form className="stack" onSubmit={create}>
             <div className="fields">
               <label>
-                Name
+                {t('Name')}
                 <input
                   value={name}
                   onChange={(event) => setName(event.target.value)}
@@ -96,7 +102,7 @@ export const AudiencesPage = ({ user }: { user: User }) => {
                 />
               </label>
               <label>
-                Views needed to qualify
+                {t('Views needed to qualify')}
                 <input
                   type="number"
                   min="1"
@@ -108,7 +114,7 @@ export const AudiencesPage = ({ user }: { user: User }) => {
               </label>
             </div>
             <fieldset className="checks">
-              <legend>Interested in</legend>
+              <legend>{t('Interested in')}</legend>
               {allGenres.map((genre) => (
                 <label key={genre}>
                   <input
@@ -128,7 +134,7 @@ export const AudiencesPage = ({ user }: { user: User }) => {
             </fieldset>
             <div>
               <button type="submit" className="button primary" disabled={genres.length === 0}>
-                Create audience
+                {t('Create audience')}
               </button>
             </div>
           </form>

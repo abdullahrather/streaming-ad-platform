@@ -143,16 +143,37 @@ const Watch = ({ show, onBack }: { show: Show; onBack: () => void }) => {
     }
   };
 
-  const changeConsent = (allowed: boolean): void => {
+  const saveConsent = (allowed: boolean): void => {
     setConsent(allowed);
     store(CONSENT_KEY, allowed ? 'yes' : 'no');
   };
 
-  const deleteProfile = async (): Promise<void> => {
+  /** Saying no later also deletes the profile built while it was yes. */
+  const changeConsent = async (allowed: boolean): Promise<void> => {
+    saveConsent(allowed);
+    if (allowed) return;
     const token = await playerToken(false);
     await fetch(`/player/profile?token=${encodeURIComponent(token)}`, { method: 'DELETE' });
-    changeConsent(false);
-    write('Viewing profile deleted');
+    write('Consent withdrawn: viewing profile deleted');
+  };
+
+  const downloadData = async (): Promise<void> => {
+    const token = await playerToken(consent);
+    const response = await fetch(`/player/data?token=${encodeURIComponent(token)}`);
+    const url = URL.createObjectURL(await response.blob());
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'viewer-data.json';
+    link.click();
+    URL.revokeObjectURL(url);
+    write('Your data was downloaded');
+  };
+
+  const deleteData = async (): Promise<void> => {
+    const token = await playerToken(false);
+    await fetch(`/player/data?token=${encodeURIComponent(token)}`, { method: 'DELETE' });
+    saveConsent(false);
+    write('Everything held about you was deleted');
   };
 
   const start = async (): Promise<void> => {
@@ -261,12 +282,15 @@ const Watch = ({ show, onBack }: { show: Show; onBack: () => void }) => {
             <input
               type="checkbox"
               checked={consent}
-              onChange={(event) => changeConsent(event.target.checked)}
+              onChange={(event) => void changeConsent(event.target.checked)}
             />
             Use what I watch to choose ads
           </label>
-          <button type="button" className="text-button" onClick={() => void deleteProfile()}>
-            Delete my viewing profile
+          <button type="button" className="text-button" onClick={() => void downloadData()}>
+            Download my data
+          </button>
+          <button type="button" className="text-button" onClick={() => void deleteData()}>
+            Delete my data
           </button>
 
           <h2>What the player reports</h2>

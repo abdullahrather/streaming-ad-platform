@@ -7,24 +7,25 @@ import {
   type CreativeStatus,
   type ReviewItem,
 } from './api';
-import { formatDateTime } from './format';
+import { formatDateTime, formatNumber, formatPercent } from './format';
 import { ErrorNote, firstError } from './ui';
+import { t } from './i18n';
 
 const STATUS: Record<CreativeStatus, { label: string; tone: string }> = {
-  PROCESSING: { label: 'Converting', tone: 'neutral' },
-  PENDING_REVIEW: { label: 'Waiting for review', tone: 'warning' },
-  APPROVED: { label: 'Approved', tone: 'good' },
-  REJECTED: { label: 'Rejected', tone: 'serious' },
-  FAILED: { label: 'Failed', tone: 'serious' },
+  PROCESSING: { label: t('Converting'), tone: 'neutral' },
+  PENDING_REVIEW: { label: t('Waiting for review'), tone: 'warning' },
+  APPROVED: { label: t('Approved'), tone: 'good' },
+  REJECTED: { label: t('Rejected'), tone: 'serious' },
+  FAILED: { label: t('Failed'), tone: 'serious' },
 };
 
 const REFRESH_MS = 2000;
 
 const COMPARISON: Record<NonNullable<Creative['comparison']>, string> = {
-  LEADING: 'Winning, with 95% confidence',
-  BEHIND: 'Losing, with 95% confidence',
-  TOO_CLOSE: 'Too close to call',
-  NOT_ENOUGH_DATA: 'Needs at least 1,000 impressions per ad',
+  LEADING: t('Winning, with 95% confidence'),
+  BEHIND: t('Losing, with 95% confidence'),
+  TOO_CLOSE: t('Too close to call'),
+  NOT_ENOUGH_DATA: t('Needs at least 1,000 impressions per ad'),
 };
 
 const Results = ({ creative }: { creative: Creative }) => {
@@ -33,8 +34,11 @@ const Results = ({ creative }: { creative: Creative }) => {
 
   return (
     <p className="small">
-      {results.impressions.toLocaleString('en')} impressions · {(results.ctr * 100).toFixed(2)}% CTR
-      · {Math.round(results.completionRate * 100)}% finished
+      {t('{impressions} impressions · {ctr} CTR · {finished} finished', {
+        impressions: formatNumber(results.impressions),
+        ctr: formatPercent(results.ctr, 2),
+        finished: formatPercent(results.completionRate, 0),
+      })}
       {comparison && <span className="muted"> · {COMPARISON[comparison]}</span>}
     </p>
   );
@@ -75,7 +79,7 @@ const UploadForm = ({ campaignId, onDone }: { campaignId: string; onDone: () => 
     <form className="stack" onSubmit={submit}>
       <div className="fields">
         <label>
-          Ad name
+          {t('Ad name')}
           <input
             value={name}
             onChange={(event) => setName(event.target.value)}
@@ -84,7 +88,7 @@ const UploadForm = ({ campaignId, onDone }: { campaignId: string; onDone: () => 
           />
         </label>
         <label>
-          Where clicks go
+          {t('Where clicks go')}
           <input
             type="url"
             value={clickUrl}
@@ -93,15 +97,15 @@ const UploadForm = ({ campaignId, onDone }: { campaignId: string; onDone: () => 
           />
         </label>
         <label className="wide">
-          Video file
+          {t('Video file')}
           <input ref={fileInput} type="file" accept="video/*" required />
         </label>
       </div>
-      <p className="hint">5 to 120 seconds, at least 240 pixels tall. MP4 works best.</p>
+      <p className="hint">{t('5 to 120 seconds, at least 240 pixels tall. MP4 works best.')}</p>
       <ErrorNote message={error} />
       <div>
         <button type="submit" className="button primary" disabled={uploading}>
-          {uploading ? 'Uploading…' : 'Upload ad'}
+          {uploading ? t('Uploading…') : t('Upload ad')}
         </button>
       </div>
     </form>
@@ -131,7 +135,7 @@ export const CampaignAds = ({ campaignId, canEdit }: { campaignId: string; canEd
   }, [converting, load]);
 
   const remove = (creative: Creative) => {
-    if (!window.confirm(`Delete “${creative.name}”?`)) return;
+    if (!window.confirm(t('Delete “{name}”?', { name: creative.name }))) return;
     api
       .deleteCreative(creative.id)
       .then(load)
@@ -142,16 +146,16 @@ export const CampaignAds = ({ campaignId, canEdit }: { campaignId: string; canEd
 
   return (
     <section className="card">
-      <h2>Video ads</h2>
+      <h2>{t('Video ads')}</h2>
       <ErrorNote message={error} />
       {creatives?.length === 0 && (
         <p className="muted">
-          No ads yet. Viewers can only see this campaign once one is approved.
+          {t('No ads yet. Viewers can only see this campaign once one is approved.')}
         </p>
       )}
       {creatives && creatives.length > 0 && !hasApproved && (
         <p className="muted">
-          No approved ads yet, so this campaign won't appear in real video players.
+          {t("No approved ads yet, so this campaign won't appear in real video players.")}
         </p>
       )}
       <ul className="ad-list">
@@ -163,23 +167,25 @@ export const CampaignAds = ({ campaignId, canEdit }: { campaignId: string; canEd
                 poster={creative.posterUrl}
                 controls
                 preload="none"
-                aria-label={`Preview of ${creative.name}`}
+                aria-label={t('Preview of {name}', { name: creative.name })}
               />
             ) : (
-              <div className="ad-placeholder">Converting…</div>
+              <div className="ad-placeholder">{t('Converting…')}</div>
             )}
             <div>
               <strong>{creative.name}</strong>
               <div className="badges">
                 <CreativeBadge status={creative.status} />
                 {creative.durationSeconds > 0 && (
-                  <span className="muted small">{Math.round(creative.durationSeconds)}s</span>
+                  <span className="muted small">
+                    {t('{round}s', { round: Math.round(creative.durationSeconds) })}
+                  </span>
                 )}
               </div>
               <Results creative={creative} />
               {canEdit && creative.status === 'APPROVED' && (
                 <label className="share">
-                  Share of delivery
+                  {t('Share of delivery')}
                   <input
                     type="number"
                     min="0"
@@ -195,17 +201,19 @@ export const CampaignAds = ({ campaignId, canEdit }: { campaignId: string; canEd
                 </label>
               )}
               {creative.rejectionReason && (
-                <p className="small">Reviewer: {creative.rejectionReason}</p>
+                <p className="small">
+                  {t('Reviewer: {rejectionReason}', { rejectionReason: creative.rejectionReason })}
+                </p>
               )}
               {creative.failureReason && <p className="small">{creative.failureReason}</p>}
               {canEdit && (
                 <button
                   type="button"
                   className="link"
-                  aria-label={`Delete ${creative.name}`}
+                  aria-label={t('Delete {name}', { name: creative.name })}
                   onClick={() => remove(creative)}
                 >
-                  Delete
+                  {t('Delete')}
                 </button>
               )}
             </div>
@@ -214,7 +222,7 @@ export const CampaignAds = ({ campaignId, canEdit }: { campaignId: string; canEd
       </ul>
       {canEdit && (
         <>
-          <h3>Upload an ad</h3>
+          <h3>{t('Upload an ad')}</h3>
           <UploadForm campaignId={campaignId} onDone={load} />
         </>
       )}
@@ -224,16 +232,16 @@ export const CampaignAds = ({ campaignId, canEdit }: { campaignId: string; canEd
 
 /** The AI assistant's first look at the poster frame. Advice only: the reviewer decides. */
 const AiAdvice = ({ review }: { review: AiReview }) => (
-  <aside className="ai-advice" aria-label="AI assistant's first look">
+  <aside className="ai-advice" aria-label={t("AI assistant's first look")}>
     <p className="small">
       <span
         className={`badge ${review.verdict === 'needs_attention' ? 'badge-serious' : 'badge-neutral'}`}
       >
         {review.status === 'unavailable'
-          ? 'AI check unavailable'
+          ? t('AI check unavailable')
           : review.verdict === 'needs_attention'
-            ? 'AI: worth a closer look'
-            : 'AI: nothing flagged'}
+            ? t('AI: worth a closer look')
+            : t('AI: nothing flagged')}
       </span>{' '}
       {review.summary}
     </p>
@@ -247,7 +255,9 @@ const AiAdvice = ({ review }: { review: AiReview }) => (
       </ul>
     )}
     <p className="muted small">
-      From the poster frame only, by {review.model}. It can miss things, so watch the video.
+      {t('From the poster frame only, by {model}. It can miss things, so watch the video.', {
+        model: review.model,
+      })}
     </p>
   </aside>
 );
@@ -272,18 +282,22 @@ const ReviewCard = ({ item, onDone }: { item: ReviewItem; onDone: () => void }) 
         poster={item.posterUrl}
         controls
         preload="none"
-        aria-label={`Preview of ${item.name}`}
+        aria-label={t('Preview of {name}', { name: item.name })}
       />
       <div className="stack">
         <div>
           <h2>{item.name}</h2>
           <p className="muted small">{item.campaignTitle}</p>
           <p className="muted small">
-            {Math.round(item.durationSeconds)}s · {item.width}×{item.height} · uploaded{' '}
-            {formatDateTime(item.createdAt)}
+            {t('{round}s · {width}×{height} · uploaded {dateTime}', {
+              round: Math.round(item.durationSeconds),
+              width: item.width,
+              height: item.height,
+              dateTime: formatDateTime(item.createdAt),
+            })}
           </p>
           <p className="small">
-            Clicks go to <a href={item.clickUrl}>{item.clickUrl}</a>
+            {t('Clicks go to')} <a href={item.clickUrl}>{item.clickUrl}</a>
           </p>
         </div>
 
@@ -291,7 +305,7 @@ const ReviewCard = ({ item, onDone }: { item: ReviewItem; onDone: () => void }) 
 
         {rejecting && (
           <label>
-            Why is it being rejected?
+            {t('Why is it being rejected?')}
             <input
               value={reason}
               onChange={(event) => setReason(event.target.value)}
@@ -305,23 +319,23 @@ const ReviewCard = ({ item, onDone }: { item: ReviewItem; onDone: () => void }) 
             <button
               type="button"
               className="button primary"
-              aria-label={`Approve ${item.name}`}
+              aria-label={t('Approve {name}', { name: item.name })}
               onClick={() => decide('APPROVE')}
             >
-              Approve
+              {t('Approve')}
             </button>
           )}
           <button
             type="button"
             className="button danger"
-            aria-label={`Reject ${item.name}`}
+            aria-label={t('Reject {name}', { name: item.name })}
             onClick={() => (rejecting ? decide('REJECT') : setRejecting(true))}
           >
-            {rejecting ? 'Confirm rejection' : 'Reject'}
+            {rejecting ? t('Confirm rejection') : t('Reject')}
           </button>
           {rejecting && (
             <button type="button" className="button" onClick={() => setRejecting(false)}>
-              Cancel
+              {t('Cancel')}
             </button>
           )}
         </div>
@@ -347,12 +361,12 @@ export const ReviewPage = () => {
     <>
       <header className="page-header">
         <div>
-          <h1>Ad review</h1>
-          <p className="muted">Ads can't reach viewers until they're approved here.</p>
+          <h1>{t('Ad review')}</h1>
+          <p className="muted">{t("Ads can't reach viewers until they're approved here.")}</p>
         </div>
       </header>
       <ErrorNote message={error} />
-      {items?.length === 0 && <p className="empty card">Nothing is waiting for review.</p>}
+      {items?.length === 0 && <p className="empty card">{t('Nothing is waiting for review.')}</p>}
       {items?.map((item) => (
         <ReviewCard key={item.id} item={item} onDone={load} />
       ))}

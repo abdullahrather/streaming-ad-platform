@@ -13,6 +13,7 @@ import { RangePicker } from './components';
 import { SLOT_LABELS, formatDate, formatDateTime, formatMoney, formatNumber } from './format';
 import { rangeFor, useLiveData } from './hooks';
 import { ErrorNote, firstError } from './ui';
+import { t } from './i18n';
 
 const errorText = (reason: unknown): string =>
   reason instanceof ApiError ? firstError(reason) : String(reason);
@@ -47,48 +48,53 @@ const OwnBilling = ({
     <Tiles
       items={[
         {
-          label: 'Balance',
+          label: t('Balance'),
           value: formatMoney(data.balanceCents),
           ...(data.rate
             ? {
-                note: `About ${formatMoney(Math.round(data.balanceCents * data.rate.rate), data.rate.currency)}`,
+                note: t('About {money}', {
+                  money: formatMoney(
+                    Math.round(data.balanceCents * data.rate.rate),
+                    data.rate.currency,
+                  ),
+                }),
               }
             : {}),
         },
         {
-          label: 'Held by running campaigns',
+          label: t('Held by running campaigns'),
           value: formatMoney(data.heldCents),
           note:
             data.vatRateBp > 0
-              ? `Their unspent budgets plus ${data.vatRateBp / 100}% VAT`
-              : 'Their unspent budgets',
+              ? t('Their unspent budgets plus {value}% VAT', { value: data.vatRateBp / 100 })
+              : t('Their unspent budgets'),
         },
         {
-          label: 'Available',
+          label: t('Available'),
           value: formatMoney(data.availableCents),
-          note: 'For new or resumed campaigns',
+          note: t('For new or resumed campaigns'),
         },
       ]}
     />
 
     <section className="card">
-      <h2>What running campaigns hold</h2>
+      <h2>{t('What running campaigns hold')}</h2>
       {data.reservations.length === 0 ? (
-        <p className="muted">No campaign is running, so nothing is held.</p>
+        <p className="muted">{t('No campaign is running, so nothing is held.')}</p>
       ) : (
         <div className="table-scroll">
           <table>
             <thead>
               <tr>
-                <th scope="col">Campaign</th>
+                <th scope="col">{t('Campaign')}</th>
                 <th scope="col" className="num">
-                  Budget
+                  {t('Budget')}
                 </th>
                 <th scope="col" className="num">
-                  Spent
+                  {t('Spent')}
                 </th>
                 <th scope="col" className="num">
-                  Held
+                  {t('Held')}
                 </th>
               </tr>
             </thead>
@@ -116,27 +122,27 @@ const OwnBilling = ({
     <BillingDetailsForm details={data.details} isOwner={isOwner} onSaved={refresh} />
 
     <section className="card">
-      <h2>Invoices</h2>
+      <h2>{t('Invoices')}</h2>
       {data.invoices.length === 0 ? (
         <p className="muted">
-          No invoices yet. A campaign is invoiced about an hour after it ends.
+          {t('No invoices yet. A campaign is invoiced about an hour after it ends.')}
         </p>
       ) : (
         <div className="table-scroll">
           <table>
             <thead>
               <tr>
-                <th scope="col">Invoice</th>
-                <th scope="col">Campaign</th>
-                <th scope="col">Flight</th>
+                <th scope="col">{t('Invoice')}</th>
+                <th scope="col">{t('Campaign')}</th>
+                <th scope="col">{t('Flight')}</th>
                 <th scope="col" className="num">
-                  Impressions
+                  {t('Impressions')}
                 </th>
                 <th scope="col" className="num">
-                  Total
+                  {t('Total')}
                 </th>
                 <th scope="col">
-                  <span className="sr-only">Download</span>
+                  <span className="sr-only">{t('Download')}</span>
                 </th>
               </tr>
             </thead>
@@ -160,10 +166,12 @@ const OwnBilling = ({
                     <button
                       type="button"
                       className="button"
-                      aria-label={`Download invoice ${invoice.number} as a PDF`}
+                      aria-label={t('Download invoice {number} as a PDF', {
+                        number: invoice.number,
+                      })}
                       onClick={() => void api.downloadInvoice(invoice.id)}
                     >
-                      PDF
+                      {t('PDF')}
                     </button>
                   </td>
                 </tr>
@@ -175,18 +183,18 @@ const OwnBilling = ({
     </section>
 
     <section className="card">
-      <h2>History</h2>
+      <h2>{t('History')}</h2>
       {data.entries.length === 0 ? (
-        <p className="muted">No payments or charges yet.</p>
+        <p className="muted">{t('No payments or charges yet.')}</p>
       ) : (
         <div className="table-scroll">
           <table>
             <thead>
               <tr>
-                <th scope="col">Date</th>
-                <th scope="col">What</th>
+                <th scope="col">{t('Date')}</th>
+                <th scope="col">{t('What')}</th>
                 <th scope="col" className="num">
-                  Amount
+                  {t('Amount')}
                 </th>
               </tr>
             </thead>
@@ -213,7 +221,7 @@ const Organisations = () => {
   const { data, error, refresh } = useLiveData(() => api.billingOrganisations(), 'organisations');
   const [organisationId, setOrganisationId] = useState('');
   const [euros, setEuros] = useState('');
-  const [description, setDescription] = useState('Bank transfer received');
+  const [description, setDescription] = useState(t('Bank transfer received'));
   const [message, setMessage] = useState('');
   const [failure, setFailure] = useState('');
 
@@ -235,7 +243,9 @@ const Organisations = () => {
     api
       .addCredit(target.id, amountCents, description)
       .then(() => {
-        setMessage(`Added ${formatMoney(amountCents)} to ${target.name}.`);
+        setMessage(
+          t('Added {money} to {name}.', { money: formatMoney(amountCents), name: target.name }),
+        );
         setEuros('');
         refresh();
       })
@@ -244,7 +254,7 @@ const Organisations = () => {
 
   return (
     <section className="card">
-      <h2>Organisations</h2>
+      <h2>{t('Organisations')}</h2>
       <ErrorNote message={error} />
       {data && (
         <>
@@ -252,19 +262,19 @@ const Organisations = () => {
             <table>
               <thead>
                 <tr>
-                  <th scope="col">Organisation</th>
-                  <th scope="col">Plan</th>
+                  <th scope="col">{t('Organisation')}</th>
+                  <th scope="col">{t('Plan')}</th>
                   <th scope="col" className="num">
-                    Balance
+                    {t('Balance')}
                   </th>
                   <th scope="col" className="num">
-                    Held
+                    {t('Held')}
                   </th>
                   <th scope="col" className="num">
-                    Available
+                    {t('Available')}
                   </th>
                   <th scope="col" className="num">
-                    Invoices
+                    {t('Invoices')}
                   </th>
                 </tr>
               </thead>
@@ -279,13 +289,13 @@ const Organisations = () => {
                     </td>
                     <td>
                       <select
-                        aria-label={`Plan for ${row.name}`}
+                        aria-label={t('Plan for {name}', { name: row.name })}
                         value={row.plan}
                         onChange={(event) => changePlan(row.id, event.target.value as PlanName)}
                       >
-                        <option value="STARTER">Starter</option>
-                        <option value="GROWTH">Growth</option>
-                        <option value="ENTERPRISE">Enterprise</option>
+                        <option value="STARTER">{t('Starter')}</option>
+                        <option value="GROWTH">{t('Growth')}</option>
+                        <option value="ENTERPRISE">{t('Enterprise')}</option>
                       </select>
                     </td>
                     <td className="num">{formatMoney(row.balanceCents)}</td>
@@ -298,10 +308,10 @@ const Organisations = () => {
             </table>
           </div>
 
-          <form className="credit-form" onSubmit={submit} aria-label="Add credit">
-            <h3>Add credit</h3>
+          <form className="credit-form" onSubmit={submit} aria-label={t('Add credit')}>
+            <h3>{t('Add credit')}</h3>
             <label>
-              Organisation
+              {t('Organisation')}
               <select value={organisationId} onChange={(e) => setOrganisationId(e.target.value)}>
                 {data.map(({ id, name }) => (
                   <option key={id} value={id}>
@@ -311,7 +321,7 @@ const Organisations = () => {
               </select>
             </label>
             <label>
-              Amount (€)
+              {t('Amount (€)')}
               <input
                 inputMode="decimal"
                 value={euros}
@@ -321,11 +331,11 @@ const Organisations = () => {
               />
             </label>
             <label>
-              Note
+              {t('Note')}
               <input value={description} onChange={(e) => setDescription(e.target.value)} />
             </label>
             <button type="submit" className="button primary">
-              Add credit
+              {t('Add credit')}
             </button>
           </form>
           <p className="muted small" aria-live="polite">
@@ -350,7 +360,7 @@ const RevenueTable = ({
   <section className="card">
     <h3>{title}</h3>
     {rows.length === 0 ? (
-      <p className="muted">No delivery in this period.</p>
+      <p className="muted">{t('No delivery in this period.')}</p>
     ) : (
       <div className="table-scroll">
         <table>
@@ -358,13 +368,13 @@ const RevenueTable = ({
             <tr>
               <th scope="col">{title.replace(/^By /, '').replace(/^./, (c) => c.toUpperCase())}</th>
               <th scope="col" className="num">
-                Impressions
+                {t('Impressions')}
               </th>
               <th scope="col" className="num">
-                Revenue
+                {t('Revenue')}
               </th>
               <th scope="col" className="num">
-                eCPM
+                {t('eCPM')}
               </th>
             </tr>
           </thead>
@@ -396,10 +406,11 @@ const PublisherRevenue = () => {
     <>
       <header className="page-header section-header">
         <div>
-          <h2>Publisher revenue</h2>
+          <h2>{t('Publisher revenue')}</h2>
           <p className="muted small">
-            What advertisers paid for ads shown on the platform. eCPM is revenue per 1,000
-            impressions.
+            {t(
+              'What advertisers paid for ads shown on the platform. eCPM is revenue per 1,000 impressions.',
+            )}
           </p>
         </div>
         <RangePicker value={rangeId} onChange={setRangeId} />
@@ -409,29 +420,31 @@ const PublisherRevenue = () => {
         <>
           <Tiles
             items={[
-              { label: 'Revenue delivered', value: formatMoney(data.revenueCents) },
-              { label: 'Impressions', value: formatNumber(data.impressions) },
+              { label: t('Revenue delivered'), value: formatMoney(data.revenueCents) },
+              { label: t('Impressions'), value: formatNumber(data.impressions) },
               {
-                label: 'Invoiced',
+                label: t('Invoiced'),
                 value: formatMoney(data.invoicedCents),
-                note: `${formatNumber(data.invoiceCount)} invoices in this period`,
+                note: t('{number} invoices in this period', {
+                  number: formatNumber(data.invoiceCount),
+                }),
               },
-              { label: 'Credit paid in', value: formatMoney(data.creditsCents) },
+              { label: t('Credit paid in'), value: formatMoney(data.creditsCents) },
               {
-                label: 'Not yet invoiced',
+                label: t('Not yet invoiced'),
                 value: formatMoney(data.unbilledCents),
-                note: 'Running campaigns, all time',
+                note: t('Running campaigns, all time'),
               },
             ]}
           />
           <div className="columns">
-            <RevenueTable title="By show" rows={data.byShow} />
-            <RevenueTable title="By advertiser" rows={data.byOrganisation} />
-            <RevenueTable title="By ad slot" rows={data.bySlot} labels={SLOT_LABELS} />
+            <RevenueTable title={t('By show')} rows={data.byShow} />
+            <RevenueTable title={t('By advertiser')} rows={data.byOrganisation} />
+            <RevenueTable title={t('By ad slot')} rows={data.bySlot} labels={SLOT_LABELS} />
           </div>
         </>
       ) : (
-        !error && <p className="empty">Loading…</p>
+        !error && <p className="empty">{t('Loading…')}</p>
       )}
     </>
   );
@@ -445,7 +458,7 @@ const OwnBillingPage = ({ user }: { user: User }) => {
       {data ? (
         <OwnBilling data={data} isOwner={user.organisationRole === 'OWNER'} refresh={refresh} />
       ) : (
-        !error && <p className="empty">Loading…</p>
+        !error && <p className="empty">{t('Loading…')}</p>
       )}
     </>
   );
@@ -455,11 +468,11 @@ export const BillingPage = ({ user }: { user: User }) => (
   <>
     <header className="page-header">
       <div>
-        <h1>Billing</h1>
+        <h1>{t('Billing')}</h1>
         <p className="muted">
-          Campaigns are paid from a prepaid balance. A running campaign holds its unspent budget, so
-          it can't spend money that isn't there. About an hour after a campaign ends, it's invoiced
-          for what it delivered and the rest is freed.
+          {t(
+            "Campaigns are paid from a prepaid balance. A running campaign holds its unspent budget, so it can't spend money that isn't there. About an hour after a campaign ends, it's invoiced for what it delivered and the rest is freed.",
+          )}
         </p>
       </div>
     </header>

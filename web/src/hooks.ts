@@ -1,17 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Range } from './api';
+import { t } from './i18n';
 
 const REFRESH_MS = 5000;
 
 export const RANGES = [
-  { id: '24h', label: '24 hours', hours: 24 },
-  { id: '7d', label: '7 days', hours: 24 * 7 },
-  { id: '30d', label: '30 days', hours: 24 * 30 },
+  { id: '24h', label: t('24 hours'), hours: 24 },
+  { id: '7d', label: t('7 days'), hours: 24 * 7 },
+  { id: '30d', label: t('30 days'), hours: 24 * 30 },
 ];
 
 /** What a range is compared with, such as "previous 7 days". */
-export const previousLabel = (id: string): string =>
-  `previous ${RANGES.find((range) => range.id === id)?.label ?? 'period'}`;
+export const previousLabel = (id: string): string => {
+  const range = RANGES.find((candidate) => candidate.id === id);
+  return range ? t('previous {range}', { range: range.label }) : t('previous period');
+};
 
 export const rangeFor = (id: string): Range => {
   const hours = RANGES.find((range) => range.id === id)?.hours ?? 24 * 7;

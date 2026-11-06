@@ -11,6 +11,7 @@ import {
 import { AiSettingsPanel } from './ai-settings';
 import { formatDateTime, formatNumber } from './format';
 import { ErrorNote, firstError } from './ui';
+import { t } from './i18n';
 
 const errorText = (reason: unknown): string =>
   reason instanceof ApiError ? firstError(reason) : String(reason);
@@ -36,22 +37,23 @@ export const canManage = (user: User): boolean =>
 const AiOff = ({ status }: { status: AiStatus }) => (
   <div className="ai-off">
     <p>
-      <strong>The AI assistant is off.</strong>{' '}
+      <strong>{t('The AI assistant is off.')}</strong>{' '}
       {status.reason.replace(/^The AI assistant is off\.\s*/, '')}
     </p>
     <p className="muted small">
-      It's optional: everything else works without it. A platform admin turns it on from the
-      Assistant page, with Claude, an OpenAI-compatible API, or a free local model through Ollama.
+      {t(
+        "It's optional: everything else works without it. A platform admin turns it on from the Assistant page, with Claude, an OpenAI-compatible API, or a free local model through Ollama.",
+      )}
     </p>
   </div>
 );
 
 const TOOL_NAMES: Record<string, string> = {
-  list_campaigns: 'campaign list',
-  diagnose_campaign: 'delivery check',
-  campaign_details: 'campaign details',
-  run_report: 'a report',
-  list_alerts: 'alerts',
+  list_campaigns: t('campaign list'),
+  diagnose_campaign: t('delivery check'),
+  campaign_details: t('campaign details'),
+  run_report: t('a report'),
+  list_alerts: t('alerts'),
 };
 
 interface Turn {
@@ -106,7 +108,7 @@ const Conversation = ({
     <div className="conversation">
       {turns.length === 0 && (
         <div className="examples">
-          <p className="muted small">Try asking:</p>
+          <p className="muted small">{t('Try asking:')}</p>
           {examples.map((example) => (
             <button key={example} type="button" className="button" onClick={() => ask(example)}>
               {example}
@@ -117,18 +119,22 @@ const Conversation = ({
       <ol className="turns" aria-live="polite">
         {turns.map((turn, index) => (
           <li key={index} className={`turn turn-${turn.role}`}>
-            <span className="sr-only">{turn.role === 'user' ? 'You asked:' : 'Assistant:'}</span>
+            <span className="sr-only">
+              {turn.role === 'user' ? t('You asked:') : t('Assistant:')}
+            </span>
             <p className="turn-text">{turn.content}</p>
             {turn.toolsUsed && turn.toolsUsed.length > 0 && (
               <p className="muted small">
-                Looked at: {turn.toolsUsed.map((tool) => TOOL_NAMES[tool] ?? tool).join(', ')}
+                {t('Looked at: {join}', {
+                  join: turn.toolsUsed.map((tool) => TOOL_NAMES[tool] ?? tool).join(', '),
+                })}
               </p>
             )}
           </li>
         ))}
         {busy && (
-          <li className="turn turn-assistant muted" aria-label="The assistant is working">
-            Looking at your data…
+          <li className="turn turn-assistant muted" aria-label={t('The assistant is working')}>
+            {t('Looking at your data…')}
           </li>
         )}
       </ol>
@@ -136,22 +142,23 @@ const Conversation = ({
       <ErrorNote message={error} />
       <form className="ask" onSubmit={submit}>
         <label className="wide">
-          <span className="sr-only">Your question</span>
+          <span className="sr-only">{t('Your question')}</span>
           <input
             value={question}
             onChange={(event) => setQuestion(event.target.value)}
-            placeholder="Ask about your campaigns"
+            placeholder={t('Ask about your campaigns')}
             maxLength={1000}
             disabled={busy}
           />
         </label>
         <button type="submit" className="button primary" disabled={busy || !question.trim()}>
-          Ask
+          {t('Ask')}
         </button>
       </form>
       <p className="muted small">
-        Answers come from your own campaign data, through read-only tools. The AI can be wrong, so
-        check important numbers on the dashboard.
+        {t(
+          'Answers come from your own campaign data, through read-only tools. The AI can be wrong, so check important numbers on the dashboard.',
+        )}
       </p>
     </div>
   );
@@ -165,23 +172,27 @@ export const AssistantPage = ({ user }: { user: User }) => {
     <>
       <header className="page-header">
         <div>
-          <h1>Assistant</h1>
+          <h1>{t('Assistant')}</h1>
           <p className="muted">
-            Ask about your campaigns in plain language.
-            {status?.enabled ? ` Using ${status.provider}, ${status.model}.` : ''}
+            {status?.enabled
+              ? t('Ask about your campaigns in plain language. Using {provider}, {model}.', {
+                  provider: status.provider,
+                  model: status.model,
+                })
+              : t('Ask about your campaigns in plain language.')}
           </p>
         </div>
       </header>
       <section className="card">
         {status === null ? (
-          <p className="empty">Loading…</p>
+          <p className="empty">{t('Loading…')}</p>
         ) : status.enabled ? (
           <Conversation
             campaignId={null}
             examples={[
-              'Which campaigns are behind, and why?',
-              'How did last week compare with the week before?',
-              'Which ad slot keeps viewers watching longest?',
+              t('Which campaigns are behind, and why?'),
+              t('How did last week compare with the week before?'),
+              t('Which ad slot keeps viewers watching longest?'),
             ]}
           />
         ) : (
@@ -192,10 +203,10 @@ export const AssistantPage = ({ user }: { user: User }) => {
         <section className="card">
           <details open={!loaded?.enabled}>
             <summary>
-              <h2 className="inline-heading">Settings</h2>
+              <h2 className="inline-heading">{t('Settings')}</h2>
             </summary>
             <p className="muted small">
-              Only platform admins see this. Changes apply at once, with no restart.
+              {t('Only platform admins see this. Changes apply at once, with no restart.')}
             </p>
             <AiSettingsPanel onChange={setChanged} />
           </details>
@@ -206,9 +217,9 @@ export const AssistantPage = ({ user }: { user: User }) => {
 };
 
 const SEVERITY: Record<string, { label: string; tone: string }> = {
-  blocker: { label: 'Blocking', tone: 'serious' },
-  limit: { label: 'Limit', tone: 'warning' },
-  info: { label: 'Context', tone: 'neutral' },
+  blocker: { label: t('Blocking'), tone: 'serious' },
+  limit: { label: t('Limit'), tone: 'warning' },
+  info: { label: t('Context'), tone: 'neutral' },
 };
 
 /** Why a campaign is behind, from its own data. Needs no AI. */
@@ -225,7 +236,7 @@ export const DeliveryCheck = ({ campaignId }: { campaignId: string }) => {
 
   return (
     <section className="card">
-      <h2>Delivery check</h2>
+      <h2>{t('Delivery check')}</h2>
       <ErrorNote message={error} />
       {diagnosis ? (
         <>
@@ -244,44 +255,44 @@ export const DeliveryCheck = ({ campaignId }: { campaignId: string }) => {
             </ul>
           )}
           <p className="muted small">
-            Worked out from this campaign's data and the delivery forecast, with no AI.
+            {t("Worked out from this campaign's data and the delivery forecast, with no AI.")}
           </p>
         </>
       ) : (
-        !error && <p className="empty">Checking…</p>
+        !error && <p className="empty">{t('Checking…')}</p>
       )}
     </section>
   );
 };
 
 const FIELD_NAMES: Record<string, string> = {
-  budgetCents: 'Budget',
-  dailyBudgetCents: 'Daily budget',
+  budgetCents: t('Budget'),
+  dailyBudgetCents: t('Daily budget'),
   cpmCents: 'CPM',
-  pacingMode: 'Pacing',
-  dailyImpressionTarget: 'Daily impression target',
-  frequencyCapPerDay: 'Frequency cap per day',
-  targetCountries: 'Countries',
-  targetDevices: 'Devices',
-  targetSlots: 'Ad slots',
-  targetGenres: 'Genres',
-  activeHours: 'Hours',
-  activeDays: 'Days',
+  pacingMode: t('Pacing'),
+  dailyImpressionTarget: t('Daily impression target'),
+  frequencyCapPerDay: t('Frequency cap per day'),
+  targetCountries: t('Countries'),
+  targetDevices: t('Devices'),
+  targetSlots: t('Ad slots'),
+  targetGenres: t('Genres'),
+  activeHours: t('Hours'),
+  activeDays: t('Days'),
 };
 
 const showValue = (field: string, value: unknown): string => {
-  if (value === null || value === undefined) return 'none';
-  if (Array.isArray(value)) return value.length === 0 ? 'all' : value.join(', ');
+  if (value === null || value === undefined) return t('none');
+  if (Array.isArray(value)) return value.length === 0 ? t('all') : value.join(', ');
   if (field.endsWith('Cents') && typeof value === 'number') return `€${formatNumber(value / 100)}`;
   if (typeof value === 'number') return formatNumber(value);
   return String(value);
 };
 
 const STATUS_LABELS: Record<Recommendation['status'], string> = {
-  PENDING: 'Waiting for approval',
-  APPLIED: 'Applied',
-  REJECTED: 'Turned down',
-  STALE: 'Out of date',
+  PENDING: t('Waiting for approval'),
+  APPLIED: t('Applied'),
+  REJECTED: t('Turned down'),
+  STALE: t('Out of date'),
 };
 
 const Recommendations = ({
@@ -311,7 +322,7 @@ const Recommendations = ({
     api
       .recommend(campaignId)
       .then((created) => {
-        if (created.length === 0) setError('The assistant found nothing that needs changing.');
+        if (created.length === 0) setError(t('The assistant found nothing that needs changing.'));
         load();
       })
       .catch((reason: unknown) => setError(errorText(reason)))
@@ -335,16 +346,17 @@ const Recommendations = ({
   return (
     <div>
       <div className="card-header">
-        <h3>Recommendations</h3>
+        <h3>{t('Recommendations')}</h3>
         {manages && (
           <button type="button" className="button" onClick={suggest} disabled={busy}>
-            {busy ? 'Thinking…' : 'Suggest changes'}
+            {busy ? t('Thinking…') : t('Suggest changes')}
           </button>
         )}
       </div>
       <p className="muted small">
-        Suggestions change nothing until an owner or manager approves them, and an approval is
-        refused if the campaign changed in the meantime.
+        {t(
+          'Suggestions change nothing until an owner or manager approves them, and an approval is refused if the campaign changed in the meantime.',
+        )}
       </p>
       <ErrorNote message={error} />
       {items && items.length > 0 && (
@@ -358,7 +370,7 @@ const Recommendations = ({
                 </span>
               </p>
               <p>{item.reason}</p>
-              <ul className="changes" aria-label="Changes">
+              <ul className="changes" aria-label={t('Changes')}>
                 {Object.keys(item.change).map((field) => (
                   <li key={field}>
                     {FIELD_NAMES[field] ?? field}: {showValue(field, item.before[field])} →{' '}
@@ -373,14 +385,14 @@ const Recommendations = ({
                     className="button"
                     onClick={() => decide(item.id, 'reject')}
                   >
-                    Turn down
+                    {t('Turn down')}
                   </button>
                   <button
                     type="button"
                     className="button primary"
                     onClick={() => decide(item.id, 'approve')}
                   >
-                    Apply change
+                    {t('Apply change')}
                   </button>
                 </div>
               )}
@@ -406,14 +418,14 @@ export const CampaignAssistant = ({
   if (!status) return null;
   return (
     <section className="card">
-      <h2>Assistant</h2>
+      <h2>{t('Assistant')}</h2>
       {status.enabled ? (
         <>
           <Conversation
             campaignId={campaignId}
             examples={[
-              'Why is this campaign behind?',
-              'How did it do this week compared with last?',
+              t('Why is this campaign behind?'),
+              t('How did it do this week compared with last?'),
             ]}
           />
           <Recommendations
@@ -460,32 +472,35 @@ export const DraftFromBrief = ({
   return (
     <dialog ref={dialog} onClose={onClose} aria-labelledby="brief-title">
       <form className="stack" onSubmit={submit}>
-        <h2 id="brief-title">Draft a campaign from a brief</h2>
+        <h2 id="brief-title">{t('Draft a campaign from a brief')}</h2>
         <label>
-          Describe the campaign in your own words
+          {t('Describe the campaign in your own words')}
           <textarea
             value={brief}
             onChange={(event) => setBrief(event.target.value)}
             rows={6}
             maxLength={4000}
-            placeholder="For example: Spring coats for Nordkap Outdoor, €20,000 over four weeks from 1 March, connected TV in Germany and Austria, evenings, drama and crime fans, at most 3 views a day."
+            placeholder={t(
+              'For example: Spring coats for Nordkap Outdoor, €20,000 over four weeks from 1 March, connected TV in Germany and Austria, evenings, drama and crime fans, at most 3 views a day.',
+            )}
           />
         </label>
         <p className="muted small">
-          The assistant fills in the campaign form. Nothing is saved until you check it and press
-          Create.
+          {t(
+            'The assistant fills in the campaign form. Nothing is saved until you check it and press Create.',
+          )}
         </p>
         <ErrorNote message={error} />
         <div className="actions">
           <button type="button" className="button" onClick={() => dialog.current?.close()}>
-            Cancel
+            {t('Cancel')}
           </button>
           <button
             type="submit"
             className="button primary"
             disabled={busy || brief.trim().length < 10}
           >
-            {busy ? 'Drafting…' : 'Draft campaign'}
+            {busy ? t('Drafting…') : t('Draft campaign')}
           </button>
         </div>
       </form>

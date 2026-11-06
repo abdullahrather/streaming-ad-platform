@@ -135,3 +135,66 @@ export const viewerInterests = async (viewerId: string): Promise<Map<string, num
 export const deleteViewerProfile = async (viewerId: string): Promise<void> => {
   await redis.del(profileKey(viewerId));
 };
+
+/** Redis glob patterns treat these as wildcards, so an ID containing them is escaped. */
+const globEscape = (text: string): string => text.replace(/[*?[\]\\]/g, '\\$&');
+const regexEscape = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/** Every key that names this viewer: the frequency counts and the traffic-rate check. */
+const viewerKeys = async (viewerId: string): Promise<string[]> => {
+  const id = regexEscape(viewerId);
+  // The patterns can also match a longer ID that ends the same way, so each key is checked.
+  const exact = [
+    new RegExp(`^frequency:[^:]+:${id}:[0-9]{4}-[0-9]{2}-[0-9]{2}$`),
+    new RegExp(`^viewer-rate:${id}:[0-9]+$`),
+  ];
+  const keys: string[] = [];
+  for (const pattern of [
+    `frequency:*:${globEscape(viewerId)}:*`,
+    `viewer-rate:${globEscape(viewerId)}:*`,
+  ]) {
+    let cursor = '0';
+    do {
+      const [next, found] = await redis.scan(cursor, 'MATCH', pattern, 'COUNT', 1000);
+      cursor = next;
+      keys.push(...found.filter((key) => exact.some((test) => test.test(key))));
+    } while (cursor !== '0');
+  }
+  return keys;
+};
+
+export interface ViewerData {
+  viewerId: string;
+  consent: boolean;
+  /** Ads seen in each genre. Only kept with consent, for 90 days after the last view. */
+  interests: Record<string, number>;
+  /** Ads seen from each campaign each day, for frequency caps. Kept for two days. */
+  adsSeen: { campaignId: string; day: string; ads: number }[];
+}
+
+/** Everything held about one viewer, for a GDPR access request. */
+export const viewerData = async (viewerId: string, consent: boolean): Promise<ViewerData> => {
+  const keys = (await viewerKeys(viewerId)).filter((key) => key.startsWith('frequency:'));
+  const counts = keys.length > 0 ? await redis.mget(...keys) : [];
+  return {
+    viewerId,
+    consent,
+    interests: Object.fromEntries(await viewerInterests(viewerId)),
+    adsSeen: keys.map((key, index) => {
+      const parts = key.split(':');
+      return {
+        campaignId: parts[1] ?? '',
+        day: parts[parts.length - 1] ?? '',
+        ads: Number(counts[index] ?? 0),
+      };
+    }),
+  };
+};
+
+/**
+ * Deletes everything held about one viewer. Reach and audience counts stay: they're
+ * anonymous estimates that can't be traced back to anyone or separated out again.
+ */
+export const eraseViewer = async (viewerId: string): Promise<void> => {
+  await redis.del(profileKey(viewerId), ...(await viewerKeys(viewerId)));
+};

@@ -3,18 +3,19 @@ import { api, type Alert, type AlertType } from './api';
 import { formatDateTime } from './format';
 import { useLiveData } from './hooks';
 import { ErrorNote } from './ui';
+import { t } from './i18n';
 
 export const ALERT_LABELS: Record<AlertType, string> = {
-  UNDER_DELIVERY: 'Delivery behind schedule',
-  BUDGET_BURN: 'Budget running out early',
-  SUDDEN_DROP: 'Sudden drop in impressions',
+  UNDER_DELIVERY: t('Delivery behind schedule'),
+  BUDGET_BURN: t('Budget running out early'),
+  SUDDEN_DROP: t('Sudden drop in impressions'),
 };
 
 /** The AI assistant's explanation, when it wrote one. Labelled so nobody mistakes it for a rule. */
 const AlertExplanation = ({ alert }: { alert: Alert }) =>
   alert.details?.explanation ? (
     <p className="alert-explanation small">
-      <span className="badge badge-neutral">AI</span> {alert.details.explanation}
+      <span className="badge badge-neutral">{t('AI')}</span> {alert.details.explanation}
     </p>
   ) : null;
 
@@ -24,9 +25,10 @@ export const OpenAlerts = ({ campaignId }: { campaignId?: string }) => {
   if (!data || data.length === 0) return null;
 
   return (
-    <section className="alert-strip" aria-label="Open alerts">
+    <section className="alert-strip" aria-label={t('Open alerts')}>
       <h2 className="alert-strip-title">
-        <span aria-hidden="true">⚠</span> {data.length} open alert{data.length === 1 ? '' : 's'}
+        <span aria-hidden="true">⚠</span>{' '}
+        {data.length === 1 ? t('1 open alert') : t('{count} open alerts', { count: data.length })}
       </h2>
       <ul>
         {data.slice(0, 5).map((alert) => (
@@ -35,7 +37,7 @@ export const OpenAlerts = ({ campaignId }: { campaignId?: string }) => {
             {campaignId ? null : (
               <>
                 {' '}
-                on <a href={`#/campaigns/${alert.campaignId}`}>{alert.campaign.title}</a>
+                {t('on')} <a href={`#/campaigns/${alert.campaignId}`}>{alert.campaign.title}</a>
               </>
             )}
             <span className="muted">: {alert.message}</span>
@@ -45,7 +47,7 @@ export const OpenAlerts = ({ campaignId }: { campaignId?: string }) => {
       </ul>
       {data.length > 5 && (
         <a href="#/alerts" className="small">
-          See all {data.length} alerts
+          {t('See all {length} alerts', { length: data.length })}
         </a>
       )}
     </section>
@@ -56,17 +58,21 @@ const AlertRow = ({ alert }: { alert: Alert }) => (
   <li className="alert-row">
     <div>
       <span className={`badge ${alert.resolvedAt ? 'badge-neutral' : 'badge-serious'}`}>
-        {alert.resolvedAt ? 'Resolved' : 'Open'}
+        {alert.resolvedAt ? t('Resolved') : t('Open')}
       </span>{' '}
-      <strong>{ALERT_LABELS[alert.type]}</strong> on{' '}
+      <strong>{ALERT_LABELS[alert.type]}</strong> {t('on')}{' '}
       <a href={`#/campaigns/${alert.campaignId}`}>{alert.campaign.title}</a>
       <span className="muted small"> · {alert.campaign.advertiser}</span>
     </div>
     <p>{alert.message}</p>
     <AlertExplanation alert={alert} />
     <p className="muted small">
-      Opened {formatDateTime(alert.openedAt)}
-      {alert.resolvedAt ? ` · resolved ${formatDateTime(alert.resolvedAt)}` : ''}
+      {alert.resolvedAt
+        ? t('Opened {opened} · resolved {resolved}', {
+            opened: formatDateTime(alert.openedAt),
+            resolved: formatDateTime(alert.resolvedAt),
+          })
+        : t('Opened {opened}', { opened: formatDateTime(alert.openedAt) })}
     </p>
   </li>
 );
@@ -79,18 +85,19 @@ export const AlertsPage = () => {
     <>
       <header className="page-header">
         <div>
-          <h1>Alerts</h1>
+          <h1>{t('Alerts')}</h1>
           <p className="muted">
-            Running campaigns are checked every few minutes for delivery falling behind, budget
-            running out early and sudden drops. Alerts resolve on their own when the problem clears.
+            {t(
+              'Running campaigns are checked every few minutes for delivery falling behind, budget running out early and sudden drops. Alerts resolve on their own when the problem clears.',
+            )}
           </p>
         </div>
-        <div className="segmented" role="group" aria-label="Which alerts">
+        <div className="segmented" role="group" aria-label={t('Which alerts')}>
           <button type="button" aria-pressed={status === 'open'} onClick={() => setStatus('open')}>
-            Open
+            {t('Open')}
           </button>
           <button type="button" aria-pressed={status === 'all'} onClick={() => setStatus('all')}>
-            All
+            {t('All')}
           </button>
         </div>
       </header>
@@ -98,7 +105,7 @@ export const AlertsPage = () => {
       {data ? (
         data.length === 0 ? (
           <p className="empty card">
-            {status === 'open' ? 'No open alerts. Everything is on track.' : 'No alerts yet.'}
+            {status === 'open' ? t('No open alerts. Everything is on track.') : t('No alerts yet.')}
           </p>
         ) : (
           <section className="card">
@@ -110,7 +117,7 @@ export const AlertsPage = () => {
           </section>
         )
       ) : (
-        !error && <p className="empty">Loading…</p>
+        !error && <p className="empty">{t('Loading…')}</p>
       )}
     </>
   );

@@ -1,7 +1,8 @@
 /**
  * src/modules/account/account.routes.ts
  *
- * The signed-in person's own settings: password, devices and two-factor login.
+ * The signed-in person's own settings: password, devices and two-factor login, and
+ * a copy or deletion of their data.
  */
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
@@ -18,6 +19,7 @@ import { auditService } from '@/modules/audit/audit.service';
 import { newPassword, personName } from '@/modules/auth/auth.schema';
 import { authService, BCRYPT_COST, matchTotp } from '@/modules/auth/auth.service';
 import { sessionService } from '@/modules/auth/session.service';
+import { deleteAccount, exportAccount } from './account-data';
 
 const RECOVERY_CODE_COUNT = 8;
 
@@ -223,6 +225,29 @@ accountRouter.post(
       actorEmail: user.email,
       ipAddress: contextOf(req).ipAddress,
     });
+    res.status(204).end();
+  }),
+);
+
+/** A copy of everything held about the person, as a download. */
+accountRouter.get(
+  '/export',
+  handle(async (req, res) => {
+    res.setHeader('Content-Disposition', 'attachment; filename="account-data.json"');
+    res.status(200).json({ status: 'success', data: await exportAccount(actorOf(req).sub) });
+  }),
+);
+
+export const deleteAccountSchema = z.object({
+  password: z.string({ error: 'Password is required.' }).min(1),
+});
+
+/** Deletes the person's account. Their organisations keep their campaigns and invoices. */
+accountRouter.delete(
+  '/',
+  handle(async (req, res) => {
+    const { password } = deleteAccountSchema.parse(req.body);
+    await deleteAccount(actorOf(req).sub, password);
     res.status(204).end();
   }),
 );

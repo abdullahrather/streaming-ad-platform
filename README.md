@@ -207,6 +207,12 @@ The platform also has a **sign-up flow** with email confirmation, **password res
 
 Emails appear in the **local mailbox** at `/#/mailbox`, so all of this works with no mail server. To send real email, set `SMTP_URL` in `.env`.
 
+The dashboard is in **English and German**. It follows the browser's language until someone picks one from the header or the sign-in page, and numbers, money and dates follow it too.
+
+### Privacy
+
+Viewers' interest profiles exist only with their consent, and withdrawing it deletes the profile. Viewers can download or delete everything held about them, and so can dashboard users from the **Account** page, where they can also delete their account. Old sign-ins, links, invitations and IP addresses are deleted on a schedule. See [privacy and GDPR](./docs/privacy.md).
+
 ### How an ad gets chosen
 
 For each ad break, the platform keeps campaigns that are active, inside their dates and schedule, under their limits, and matching the country, device, slot, show genre and audience.
@@ -226,6 +232,7 @@ Real players use `/vast`, which only considers campaigns with an approved ad. `/
 - **Player events** use signed links from the VAST response, so players hold no secret and can't report on another campaign.
 - **Permissions** are checked against the database on every request, so sign-outs, suspensions and role changes apply immediately.
 - **Secrets** are never stored in plain text: email links and recovery codes are hashed, and two-factor secrets are encrypted.
+- **Scanned in CI:** CodeQL checks the code, pull requests that add a vulnerable package fail, and `npm audit` checks both packages. GitHub's secret scanning blocks pushed keys.
 
 ## Using it with other video players
 
@@ -360,6 +367,7 @@ web/             The React dashboard, the demo streaming site and the player SDK
 |---|---|
 | `npm run dev` | Start everything |
 | `npm test` | Run the integration tests |
+| `npm run test:e2e` | Run the browser tests against the running app (see [CONTRIBUTING.md](./CONTRIBUTING.md)) |
 | `npm run test:coverage` | Tests with a coverage report |
 | `npm run lint` | Lint the API |
 | `npm run format` | Format the code |
@@ -401,6 +409,8 @@ This is a working demonstration, not a system that has run under real load.
 - A reserved ad that never plays is only returned after its campaign has been quiet for two minutes, so a campaign near its limit can briefly under-deliver.
 - Dashboard totals lag slightly behind live traffic, because events pass through the queue first.
 - `/ad-decision` and `/events` share one API key, which suits a trusted ad server.
+- In German, text written by the server stays in English: error messages, alert messages, delivery check findings and AI answers. The demo streaming site is English only.
+- Deleted data stays in older backups until they're pruned. See [privacy limits](./docs/privacy.md#limits).
 - Sign-ups, invitations, reports and alerts need `SMTP_URL` for real email; without it, messages stay in the local mailbox.
 - Database queries aren't traced one by one, and the ApiDown alert can't be emailed through the API that's down. See [the operations guide](./docs/operations.md).
 - Reach is an estimate, usually within 1 to 2%, and alert thresholds are the same for every campaign. See [how reporting and alerts work](./docs/reporting.md#limits).

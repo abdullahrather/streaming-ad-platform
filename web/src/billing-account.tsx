@@ -8,8 +8,9 @@ import {
   type PlanLimit,
 } from './api';
 import { Progress } from './components';
-import { formatMoney, formatNumber } from './format';
+import { formatDecimal, formatMoney, formatNumber } from './format';
 import { ErrorNote, firstError } from './ui';
+import { t } from './i18n';
 
 const errorText = (reason: unknown): string =>
   reason instanceof ApiError ? firstError(reason) : String(reason);
@@ -18,44 +19,44 @@ export const CURRENCIES = ['EUR', 'GBP', 'CHF', 'SEK', 'DKK', 'NOK', 'PLN', 'CZK
 
 /** EU countries, then a few common ones outside the EU. */
 const COUNTRIES: Array<[string, string]> = [
-  ['AT', 'Austria'],
-  ['BE', 'Belgium'],
-  ['BG', 'Bulgaria'],
-  ['HR', 'Croatia'],
-  ['CY', 'Cyprus'],
-  ['CZ', 'Czechia'],
-  ['DK', 'Denmark'],
-  ['EE', 'Estonia'],
-  ['FI', 'Finland'],
-  ['FR', 'France'],
-  ['DE', 'Germany'],
-  ['GR', 'Greece'],
-  ['HU', 'Hungary'],
-  ['IE', 'Ireland'],
-  ['IT', 'Italy'],
-  ['LV', 'Latvia'],
-  ['LT', 'Lithuania'],
-  ['LU', 'Luxembourg'],
-  ['MT', 'Malta'],
-  ['NL', 'Netherlands'],
-  ['PL', 'Poland'],
-  ['PT', 'Portugal'],
-  ['RO', 'Romania'],
-  ['SK', 'Slovakia'],
-  ['SI', 'Slovenia'],
-  ['ES', 'Spain'],
-  ['SE', 'Sweden'],
-  ['NO', 'Norway'],
-  ['CH', 'Switzerland'],
-  ['GB', 'United Kingdom'],
-  ['US', 'United States'],
+  ['AT', t('Austria')],
+  ['BE', t('Belgium')],
+  ['BG', t('Bulgaria')],
+  ['HR', t('Croatia')],
+  ['CY', t('Cyprus')],
+  ['CZ', t('Czechia')],
+  ['DK', t('Denmark')],
+  ['EE', t('Estonia')],
+  ['FI', t('Finland')],
+  ['FR', t('France')],
+  ['DE', t('Germany')],
+  ['GR', t('Greece')],
+  ['HU', t('Hungary')],
+  ['IE', t('Ireland')],
+  ['IT', t('Italy')],
+  ['LV', t('Latvia')],
+  ['LT', t('Lithuania')],
+  ['LU', t('Luxembourg')],
+  ['MT', t('Malta')],
+  ['NL', t('Netherlands')],
+  ['PL', t('Poland')],
+  ['PT', t('Portugal')],
+  ['RO', t('Romania')],
+  ['SK', t('Slovakia')],
+  ['SI', t('Slovenia')],
+  ['ES', t('Spain')],
+  ['SE', t('Sweden')],
+  ['NO', t('Norway')],
+  ['CH', t('Switzerland')],
+  ['GB', t('United Kingdom')],
+  ['US', t('United States')],
 ];
 
-const PLAN_NAMES = { STARTER: 'Starter', GROWTH: 'Growth', ENTERPRISE: 'Enterprise' };
+const PLAN_NAMES = { STARTER: t('Starter'), GROWTH: t('Growth'), ENTERPRISE: t('Enterprise') };
 const LIMIT_LABELS: Record<PlanLimit, string> = {
-  runningCampaigns: 'Running campaigns',
-  members: 'Team members and open invitations',
-  scheduledReports: 'Scheduled reports',
+  runningCampaigns: t('Running campaigns'),
+  members: t('Team members and open invitations'),
+  scheduledReports: t('Scheduled reports'),
 };
 
 /** Reads ?checkout=… from the address after Stripe sends the payer back. */
@@ -78,8 +79,10 @@ export const CheckoutReturn = ({ onCredited }: { onCredited: () => void }) => {
       .then(({ paid, entry }) => {
         setMessage(
           paid && entry
-            ? `Payment received: ${formatMoney(entry.amountCents)} added to your balance.`
-            : 'Stripe has not confirmed the payment yet. It will appear here once it does.',
+            ? t('Payment received: {money} added to your balance.', {
+                money: formatMoney(entry.amountCents),
+              })
+            : t('Stripe has not confirmed the payment yet. It will appear here once it does.'),
         );
         if (paid) onCredited();
       })
@@ -117,18 +120,19 @@ export const AddCredit = ({ data, isOwner }: { data: BillingOverview; isOwner: b
 
   return (
     <section className="card">
-      <h2>Add credit</h2>
+      <h2>{t('Add credit')}</h2>
       {!data.cardPayments ? (
         <p className="muted">
-          Card payments aren't set up on this platform. Ask the platform team to add credit, for
-          example when your bank transfer arrives.
+          {t(
+            "Card payments aren't set up on this platform. Ask the platform team to add credit, for example when your bank transfer arrives.",
+          )}
         </p>
       ) : !isOwner ? (
-        <p className="muted">Owners can add credit by card.</p>
+        <p className="muted">{t('Owners can add credit by card.')}</p>
       ) : (
-        <form className="credit-form" onSubmit={pay} aria-label="Pay by card">
+        <form className="credit-form" onSubmit={pay} aria-label={t('Pay by card')}>
           <label>
-            Amount ({currency})
+            {t('Amount ({currency})', { currency })}
             <input
               inputMode="decimal"
               value={amount}
@@ -138,13 +142,15 @@ export const AddCredit = ({ data, isOwner }: { data: BillingOverview; isOwner: b
             />
           </label>
           <button type="submit" className="button primary" disabled={busy}>
-            {busy ? 'Opening Stripe…' : 'Pay by card'}
+            {busy ? t('Opening Stripe…') : t('Pay by card')}
           </button>
           <p className="muted small">
-            You pay on Stripe's secure page.
             {data.rate
-              ? ` It's added to your balance in euros at today's rate: 1 EUR = ${data.rate.rate.toFixed(4)} ${currency}.`
-              : ''}
+              ? t(
+                  "You pay on Stripe's secure page. It's added to your balance in euros at today's rate: 1 EUR = {rate} {currency}.",
+                  { rate: formatDecimal(data.rate.rate, 4), currency },
+                )
+              : t("You pay on Stripe's secure page.")}
           </p>
         </form>
       )}
@@ -155,7 +161,7 @@ export const AddCredit = ({ data, isOwner }: { data: BillingOverview; isOwner: b
 
 export const PlanUsage = ({ data }: { data: BillingOverview }) => (
   <section className="card">
-    <h2>Plan: {PLAN_NAMES[data.plan]}</h2>
+    <h2>{t('Plan: {value}', { value: PLAN_NAMES[data.plan] })}</h2>
     <div className="stack">
       {(Object.keys(LIMIT_LABELS) as PlanLimit[]).map((limit) => {
         const max = data.limits[limit];
@@ -166,8 +172,11 @@ export const PlanUsage = ({ data }: { data: BillingOverview }) => (
               <span>{LIMIT_LABELS[limit]}</span>
               <span className="bar-value">
                 {max === null
-                  ? `${formatNumber(used)}, no limit`
-                  : `${formatNumber(used)} of ${formatNumber(max)}`}
+                  ? t('{number}, no limit', { number: formatNumber(used) })
+                  : t('{number} of {number2}', {
+                      number: formatNumber(used),
+                      number2: formatNumber(max),
+                    })}
               </span>
             </div>
             {max !== null && (
@@ -177,15 +186,16 @@ export const PlanUsage = ({ data }: { data: BillingOverview }) => (
         );
       })}
     </div>
-    <p className="muted small">A platform admin changes the plan.</p>
+    <p className="muted small">{t('A platform admin changes the plan.')}</p>
   </section>
 );
 
 const VAT_CHECK: Record<NonNullable<BillingDetails['vatCheck']>, string> = {
-  valid: 'The EU confirmed this VAT ID.',
-  invalid: 'The EU does not know this VAT ID, so German VAT is charged.',
-  unavailable:
+  valid: t('The EU confirmed this VAT ID.'),
+  invalid: t('The EU does not know this VAT ID, so German VAT is charged.'),
+  unavailable: t(
     "The EU's VAT check isn't answering right now, so German VAT is charged. Save again later.",
+  ),
   'not needed': '',
 };
 
@@ -234,19 +244,22 @@ export const BillingDetailsForm = ({
 
   return (
     <section className="card">
-      <h2>Billing details</h2>
+      <h2>{t('Billing details')}</h2>
       <p className="muted small">
-        Printed on your invoices. Your country and VAT ID decide the VAT.
-        {isOwner ? '' : ' Owners can change them.'}
+        {isOwner
+          ? t('Printed on your invoices. Your country and VAT ID decide the VAT.')
+          : t(
+              'Printed on your invoices. Your country and VAT ID decide the VAT. Owners can change them.',
+            )}
       </p>
       <form className="details-form" onSubmit={save}>
-        {field('billingName', 'Company name')}
-        {field('addressLine1', 'Address')}
-        {field('addressLine2', 'Address, second line')}
-        {field('postalCode', 'Postcode')}
-        {field('city', 'City')}
+        {field('billingName', t('Company name'))}
+        {field('addressLine1', t('Address'))}
+        {field('addressLine2', t('Address, second line'))}
+        {field('postalCode', t('Postcode'))}
+        {field('city', t('City'))}
         <label>
-          Country
+          {t('Country')}
           <select
             value={form.country}
             onChange={(event) =>
@@ -254,7 +267,7 @@ export const BillingDetailsForm = ({
             }
             disabled={!isOwner}
           >
-            <option value="">Choose a country</option>
+            <option value="">{t('Choose a country')}</option>
             {COUNTRIES.map(([code, name]) => (
               <option key={code} value={code}>
                 {name}
@@ -262,9 +275,9 @@ export const BillingDetailsForm = ({
             ))}
           </select>
         </label>
-        {field('vatId', 'VAT ID', { placeholder: 'For example FR12345678901' })}
+        {field('vatId', t('VAT ID'), { placeholder: t('For example FR12345678901') })}
         <label>
-          Pay and be invoiced in
+          {t('Pay and be invoiced in')}
           <select
             value={form.currency}
             onChange={(event) =>
@@ -282,15 +295,17 @@ export const BillingDetailsForm = ({
         {isOwner && (
           <div className="actions">
             <button type="submit" className="button primary" disabled={busy}>
-              {busy ? 'Saving…' : 'Save details'}
+              {busy ? t('Saving…') : t('Save details')}
             </button>
           </div>
         )}
       </form>
       <div aria-live="polite">
         <p className="small">
-          <span className="badge badge-neutral">VAT {shown.vat.rateBp / 100}%</span>{' '}
-          {shown.vat.note || 'German VAT applies.'}
+          <span className="badge badge-neutral">
+            {t('VAT {value}%', { value: shown.vat.rateBp / 100 })}
+          </span>{' '}
+          {shown.vat.note || t('German VAT applies.')}
         </p>
         {result?.vatCheck && VAT_CHECK[result.vatCheck] && (
           <p className="muted small">{VAT_CHECK[result.vatCheck]}</p>

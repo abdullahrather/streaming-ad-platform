@@ -33,3 +33,7 @@ Thumbs.db
 
 # Dashboard build
 web/dist/
+
+# Browser test output
+test-results/
+playwright-report/

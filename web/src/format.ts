@@ -1,6 +1,8 @@
-const compact = new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 });
-const whole = new Intl.NumberFormat('en');
-const euros = new Intl.NumberFormat('en', {
+import { locale, t } from './i18n';
+
+const compact = new Intl.NumberFormat(locale, { notation: 'compact', maximumFractionDigits: 1 });
+const whole = new Intl.NumberFormat(locale);
+const euros = new Intl.NumberFormat(locale, {
   style: 'currency',
   currency: 'EUR',
   maximumFractionDigits: 0,
@@ -11,16 +13,27 @@ export const formatNumber = (value: number): string => whole.format(value);
 export const formatEuros = (cents: number): string => euros.format(cents / 100);
 /** To the cent, for balances and invoices. Euros unless another currency is given. */
 export const formatMoney = (cents: number, currency = 'EUR'): string =>
-  new Intl.NumberFormat('en', { style: 'currency', currency }).format(cents / 100);
-export const formatCpm = (cents: number): string => `€${(cents / 100).toFixed(2)}`;
+  new Intl.NumberFormat(locale, { style: 'currency', currency }).format(cents / 100);
+export const formatCpm = (cents: number): string =>
+  new Intl.NumberFormat(locale, { style: 'currency', currency: 'EUR' }).format(cents / 100);
 export const formatPercent = (value: number, digits = 1): string =>
-  `${(value * 100).toFixed(digits)}%`;
+  new Intl.NumberFormat(locale, {
+    style: 'percent',
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  }).format(value);
+/** A number with a fixed number of decimals, such as an average frequency. */
+export const formatDecimal = (value: number, digits = 1): string =>
+  new Intl.NumberFormat(locale, {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  }).format(value);
 
 export const formatDate = (value: string): string =>
-  new Date(value).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  new Date(value).toLocaleDateString(locale, { day: 'numeric', month: 'short', year: 'numeric' });
 
 export const formatDateTime = (value: string): string =>
-  new Date(value).toLocaleString('en-GB', {
+  new Date(value).toLocaleString(locale, {
     day: 'numeric',
     month: 'short',
     hour: '2-digit',
@@ -29,41 +42,41 @@ export const formatDateTime = (value: string): string =>
 
 export const formatTick = (value: string, hourly: boolean): string =>
   new Date(value).toLocaleString(
-    'en-GB',
+    locale,
     hourly ? { hour: '2-digit', minute: '2-digit' } : { day: 'numeric', month: 'short' },
   );
 
 export const ROLE_NAMES: Record<string, string> = {
-  OWNER: 'Owner',
-  MANAGER: 'Manager',
-  ANALYST: 'Analyst',
+  OWNER: t('Owner'),
+  MANAGER: t('Manager'),
+  ANALYST: t('Analyst'),
 };
 
 export const ROLE_DESCRIPTIONS: Record<string, string> = {
-  OWNER: 'Owners manage the team and campaigns.',
-  MANAGER: 'Managers run campaigns and can see team activity.',
-  ANALYST: 'Analysts can view campaigns and reports, but not change them.',
+  OWNER: t('Owners manage the team and campaigns.'),
+  MANAGER: t('Managers run campaigns and can see team activity.'),
+  ANALYST: t('Analysts can view campaigns and reports, but not change them.'),
 };
 
 export const SLOT_LABELS: Record<string, string> = {
-  PRE_ROLL: 'Pre-roll',
-  MID_ROLL: 'Mid-roll',
-  POST_ROLL: 'Post-roll',
+  PRE_ROLL: t('Pre-roll'),
+  MID_ROLL: t('Mid-roll'),
+  POST_ROLL: t('Post-roll'),
 };
 
 export const DEVICE_LABELS: Record<string, string> = {
-  CTV: 'Connected TV',
-  MOBILE: 'Mobile',
-  WEB: 'Web',
-  TABLET: 'Tablet',
+  CTV: t('Connected TV'),
+  MOBILE: t('Mobile'),
+  WEB: t('Web'),
+  TABLET: t('Tablet'),
 };
 
 export const COUNTRY_LABELS: Record<string, string> = {
-  AT: 'Austria',
-  DE: 'Germany',
-  ES: 'Spain',
-  FR: 'France',
-  IT: 'Italy',
-  NL: 'Netherlands',
-  SE: 'Sweden',
+  AT: t('Austria'),
+  DE: t('Germany'),
+  ES: t('Spain'),
+  FR: t('France'),
+  IT: t('Italy'),
+  NL: t('Netherlands'),
+  SE: t('Sweden'),
 };
