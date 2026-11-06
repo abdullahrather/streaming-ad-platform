@@ -13,6 +13,7 @@ import { AppError } from '@/middleware/errorHandler';
 import { auditService } from '@/modules/audit/audit.service';
 import { reviewQueueSchema, reviewSchema } from '@/modules/creatives/creatives.schema';
 import { creativesService } from '@/modules/creatives/creatives.service';
+import { decisionCache } from '@/modules/delivery/decision-cache';
 import { queueDepth } from '@/modules/delivery/event-queue';
 import { sessionService } from '@/modules/auth/session.service';
 import { auditQuerySchema } from '@/modules/team/team.schema';
@@ -174,6 +175,7 @@ adminRouter.patch(
       data: { suspendedAt: suspended ? new Date() : null },
     });
     if (count === 0) throw new AppError(404, 'Organisation not found.');
+    decisionCache.invalidate();
 
     await auditService.record({
       action: suspended ? 'admin.organisation_suspended' : 'admin.organisation_restored',

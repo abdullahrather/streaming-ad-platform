@@ -33,6 +33,8 @@ const envSchema = z.object({
   INGEST_API_KEY: secret('INGEST_API_KEY', 16),
   CORS_ORIGIN: z.string().default(''),
   LOGIN_RATE_LIMIT: z.coerce.number().int().positive().default(20),
+  /** Dashboard API requests per minute from one address. A busy dashboard page makes about 100. */
+  DASHBOARD_RATE_LIMIT: z.coerce.number().int().positive().default(600),
   REDIS_URL: z.string().default('redis://localhost:6379'),
   RUN_EVENT_WORKER: z.stringbool().default(true),
   RUN_SCHEDULER: z.stringbool().default(true),

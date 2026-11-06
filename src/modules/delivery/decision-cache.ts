@@ -97,7 +97,13 @@ const load = async (): Promise<DecisionSnapshot> => {
   const now = new Date();
   const [rows, shows] = await Promise.all([
     prisma.campaign.findMany({
-      where: { status: 'ACTIVE', startsAt: { lte: now }, endsAt: { gt: now } },
+      where: {
+        status: 'ACTIVE',
+        startsAt: { lte: now },
+        endsAt: { gt: now },
+        // A suspended organisation's ads stop until a platform admin restores it.
+        organisation: { suspendedAt: null },
+      },
       include: { creatives: { where: { status: CreativeStatus.APPROVED } } },
     }),
     prisma.show.findMany({ select: { id: true, genre: true } }),

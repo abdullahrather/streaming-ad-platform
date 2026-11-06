@@ -19,6 +19,7 @@ process.env['JWT_SECRET'] ??= 'test-secret-that-is-at-least-32-characters';
 process.env['INGEST_API_KEY'] ??= 'test-ingest-key-1234';
 process.env['ENCRYPTION_KEY'] ??= 'test-encryption-key-that-is-long-enough';
 process.env['LOGIN_RATE_LIMIT'] = '100000';
+process.env['DASHBOARD_RATE_LIMIT'] = '100000';
 const redisUrl = new URL(process.env['REDIS_URL'] ?? 'redis://localhost:6379');
 redisUrl.pathname = '/1';
 process.env['REDIS_URL'] = redisUrl.toString();
