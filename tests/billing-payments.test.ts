@@ -226,6 +226,43 @@ describe('VAT', () => {
     expect(down.body.data).toMatchObject({ vatIdVerified: false, vatCheck: 'unavailable' });
   });
 
+  it('keeps a confirmed VAT ID when VIES is down and only the address changes', async () => {
+    const auth = await login(await createTestUser());
+    const details = { country: 'FR', vatId: 'FR12345678901', city: 'Paris' };
+    await request(app).put('/billing/details').set('Authorization', auth).send(details);
+    vies = { status: 200, body: { isValid: false, userError: 'MS_UNAVAILABLE' } };
+
+    const sameId = await request(app)
+      .put('/billing/details')
+      .set('Authorization', auth)
+      .send({ ...details, city: 'Lyon' });
+    const newId = await request(app)
+      .put('/billing/details')
+      .set('Authorization', auth)
+      .send({ ...details, vatId: 'FR98765432109' });
+
+    expect(sameId.body.data).toMatchObject({
+      city: 'Lyon',
+      vatIdVerified: true,
+      vatCheck: 'unavailable',
+    });
+    expect(sameId.body.data.vat.rateBp).toBe(0);
+    // A different VAT ID can't inherit the old one's confirmation.
+    expect(newId.body.data).toMatchObject({ vatIdVerified: false });
+  });
+
+  it('only accepts countries it knows, so no one can pick their way out of VAT', async () => {
+    const auth = await login(await createTestUser());
+
+    const madeUp = await request(app)
+      .put('/billing/details')
+      .set('Authorization', auth)
+      .send({ country: 'ZZ' });
+
+    expect(madeUp.status).toBe(422);
+    expect(await testPrisma.organisation.count({ where: { country: 'ZZ' } })).toBe(0);
+  });
+
   it('refuses a VAT ID for another country, and lets only owners change details', async () => {
     const owner = await createTestUser();
     const manager = await createTestUser({

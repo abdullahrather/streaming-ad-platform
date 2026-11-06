@@ -47,6 +47,12 @@ export const EU_COUNTRIES = [
   'SE',
 ] as const;
 
+/**
+ * Countries a customer can be in: the EU, and the others the dashboard offers. A fixed
+ * list, because any other code would count as "outside the EU" and pay no VAT.
+ */
+export const BILLING_COUNTRIES = [...EU_COUNTRIES, 'NO', 'CH', 'GB', 'US'] as const;
+
 /** VAT IDs start with the country code, except Greece, which uses EL. */
 export const vatPrefix = (country: string): string => (country === 'GR' ? 'EL' : country);
 

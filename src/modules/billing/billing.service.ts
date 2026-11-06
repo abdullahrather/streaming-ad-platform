@@ -29,6 +29,7 @@ import { CURRENCIES, decimal, fromEuros, rateFor, type Rate } from './currency';
 import { PLAN_LIMITS, usageOf, type Limit, type Usage } from './plans';
 import { stripe } from './stripe';
 import {
+  BILLING_COUNTRIES,
   EU_COUNTRIES,
   GERMAN_VAT_BP,
   checkVatId,
@@ -67,7 +68,9 @@ export const detailsSchema = z.object({
     .string()
     .trim()
     .toUpperCase()
-    .regex(/^([A-Z]{2})?$/, { error: 'Choose a country.' })
+    .refine((code) => code === '' || (BILLING_COUNTRIES as readonly string[]).includes(code), {
+      error: 'Choose a country from the list.',
+    })
     .default(''),
   vatId: z
     .string()
@@ -536,9 +539,21 @@ class BillingService {
       dto.country !== 'DE' &&
       (EU_COUNTRIES as readonly string[]).includes(dto.country);
     const vatCheck = needsCheck ? await checkVatId(dto.country, dto.vatId) : 'not needed';
+    // VIES being down isn't a "no": an unchanged VAT ID that was confirmed stays confirmed.
+    const current = await prisma.organisation.findUniqueOrThrow({
+      where: { id: actor.organisationId },
+      select: { country: true, vatId: true, vatIdVerifiedAt: true },
+    });
+    const unchanged = current.country === dto.country && current.vatId === dto.vatId;
+    const vatIdVerifiedAt =
+      vatCheck === 'valid'
+        ? new Date()
+        : vatCheck === 'unavailable' && unchanged
+          ? current.vatIdVerifiedAt
+          : null;
     const updated = await prisma.organisation.update({
       where: { id: actor.organisationId },
-      data: { ...dto, vatIdVerifiedAt: vatCheck === 'valid' ? new Date() : null },
+      data: { ...dto, vatIdVerifiedAt },
     });
     return { ...this.detailsOf(updated), vatCheck };
   }
