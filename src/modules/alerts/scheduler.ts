@@ -2,11 +2,13 @@
  * src/modules/alerts/scheduler.ts
  *
  * Sends due reports every minute, checks campaigns for alerts every few minutes,
- * invoices finished campaigns every five, and fetches exchange rates every six hours. Every API process can run it: reports
+ * invoices finished campaigns every five, deletes personal data past its retention limit
+ * every hour, and fetches exchange rates every six hours. Every API process can run it: reports
  * are claimed before sending, open alerts are unique, and a campaign is billed once.
  */
 import { env } from '@/config/env';
 import { billingService } from '@/modules/billing/billing.service';
+import { applyRetention } from '@/modules/account/retention';
 import { refreshRates } from '@/modules/billing/currency';
 import { runDueReports } from '@/modules/reports/report-delivery';
 import { alertsService } from './alerts.service';
@@ -17,6 +19,7 @@ const REPORT_CHECK_MS = 60_000;
 const BILLING_CHECK_MS = 5 * 60_000;
 // The ECB publishes once a working day, around 16:00 Frankfurt time.
 const RATES_CHECK_MS = 6 * 60 * 60_000;
+const RETENTION_CHECK_MS = 60 * 60_000;
 // The first check runs soon after startup rather than a full interval later.
 const FIRST_CHECK_MS = 15_000;
 
@@ -51,11 +54,13 @@ export const startScheduler = (): (() => void) => {
   const stopAlerts = every(() => alertsService.check(), 'Alert check', env.ALERT_CHECK_MS);
   const stopBilling = every(() => billingService.run(), 'Billing', BILLING_CHECK_MS);
   const stopRates = every(() => refreshRates(), 'Exchange rates', RATES_CHECK_MS);
+  const stopRetention = every(() => applyRetention(), 'Retention', RETENTION_CHECK_MS);
 
   return () => {
     stopReports();
     stopAlerts();
     stopBilling();
     stopRates();
+    stopRetention();
   };
 };

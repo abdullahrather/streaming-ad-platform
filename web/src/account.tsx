@@ -386,6 +386,78 @@ const AlertsCard = ({ user, onChanged }: { user: User; onChanged: () => void }) 
   );
 };
 
+/** A copy of everything held about the person, and deleting their account. */
+const DataCard = () => {
+  const [confirming, setConfirming] = useState(false);
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+
+  const download = () => {
+    setError('');
+    api.exportAccount().catch((reason: ApiError) => setError(firstError(reason)));
+  };
+
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    setError('');
+    api
+      .deleteAccount(password)
+      // Every session has ended, so starting again shows the sign-in page.
+      .then(() => window.location.assign('/'))
+      .catch((reason: ApiError) => setError(firstError(reason)));
+  };
+
+  return (
+    <section className="card">
+      <h2>Your data</h2>
+      <p className="muted">
+        Download a copy of everything held about you: your profile, teams, devices and activity.
+      </p>
+      <div>
+        <button type="button" className="button" onClick={download}>
+          Download my data
+        </button>
+      </div>
+      {confirming ? (
+        <form className="stack" onSubmit={submit}>
+          <p>
+            Deleting your account signs you out everywhere and removes your name and email. Your
+            teams keep their campaigns, reports and invoices.
+          </p>
+          <label>
+            Password
+            <input
+              type="password"
+              autoComplete="current-password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              required
+            />
+          </label>
+          <ErrorNote message={error} />
+          <div className="actions">
+            <button type="submit" className="button danger">
+              Delete my account
+            </button>
+            <button type="button" className="button" onClick={() => setConfirming(false)}>
+              Cancel
+            </button>
+          </div>
+        </form>
+      ) : (
+        <>
+          <ErrorNote message={error} />
+          <div>
+            <button type="button" className="button danger" onClick={() => setConfirming(true)}>
+              Delete my account…
+            </button>
+          </div>
+        </>
+      )}
+    </section>
+  );
+};
+
 export const AccountPage = ({ user, onChanged }: { user: User; onChanged: () => void }) => {
   const [refreshKey, setRefreshKey] = useState(0);
 
@@ -403,6 +475,7 @@ export const AccountPage = ({ user, onChanged }: { user: User; onChanged: () => 
         <TwoFactorCard user={user} onChanged={onChanged} />
         <AlertsCard user={user} onChanged={onChanged} />
         <DevicesCard refreshKey={refreshKey} />
+        <DataCard />
       </div>
     </>
   );

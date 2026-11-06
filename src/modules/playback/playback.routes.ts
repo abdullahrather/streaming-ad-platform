@@ -25,7 +25,12 @@ import {
 import { decisionCache } from '@/modules/delivery/decision-cache';
 import { deliveryService } from '@/modules/delivery/delivery.service';
 import { enqueueEvents, enqueueFiltered } from '@/modules/delivery/event-queue';
-import { deleteViewerProfile, noteViewedGenre } from '@/modules/delivery/viewer-activity';
+import {
+  deleteViewerProfile,
+  eraseViewer,
+  noteViewedGenre,
+  viewerData,
+} from '@/modules/delivery/viewer-activity';
 import { isBot, isExcessive, isImpossibleCompletion, type FilterReason } from './traffic-quality';
 import { buildVast, emptyVast } from './vast';
 import { logger } from '@/lib/logger';
@@ -169,6 +174,26 @@ playbackRouter.delete(
   handle(async (req, res) => {
     const { viewerId } = readPlayerToken(req.query['token']);
     await deleteViewerProfile(viewerId);
+    res.status(204).end();
+  }),
+);
+
+/** Everything held about the viewer, as a download. */
+playbackRouter.get(
+  '/player/data',
+  handle(async (req, res) => {
+    const { viewerId, consent } = readPlayerToken(req.query['token']);
+    res.setHeader('Content-Disposition', 'attachment; filename="viewer-data.json"');
+    res.status(200).json({ status: 'success', data: await viewerData(viewerId, consent) });
+  }),
+);
+
+/** Deletes everything held about the viewer. */
+playbackRouter.delete(
+  '/player/data',
+  handle(async (req, res) => {
+    const { viewerId } = readPlayerToken(req.query['token']);
+    await eraseViewer(viewerId);
     res.status(204).end();
   }),
 );

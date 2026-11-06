@@ -704,6 +704,9 @@ export const api = {
   devices: () => request<Device[]>('/account/sessions'),
   signOutOthers: () => remove('/account/sessions'),
   signOutDevice: (id: string) => remove(`/account/sessions/${id}`),
+  exportAccount: () => download('/account/export'),
+  deleteAccount: (password: string) =>
+    request('/account', { method: 'DELETE', body: JSON.stringify({ password }) }),
   startTwoFactor: () => post<{ secret: string; qrCode: string }>('/account/two-factor/setup'),
   enableTwoFactor: (code: string) =>
     post<{ recoveryCodes: string[] }>('/account/two-factor/enable', { code }),

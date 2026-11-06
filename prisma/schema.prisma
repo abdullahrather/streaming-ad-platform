@@ -248,7 +248,8 @@ model OneTimeToken {
   @@map("one_time_tokens")
 }
 
-/// Append-only history of who changed what. Survives deleted users and organisations.
+/// Append-only history of who changed what. Survives deleted users and organisations;
+/// IP addresses are cleared after 90 days and entries deleted after two years.
 model AuditLog {
   id             String   @id @default(cuid())
   organisationId String?  @map("organisation_id")

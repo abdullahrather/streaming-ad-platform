@@ -7,6 +7,7 @@
 import { z } from 'zod';
 import {
   changePasswordSchema,
+  deleteAccountSchema,
   disableTwoFactorSchema,
   enableTwoFactorSchema,
   updateProfileSchema,
@@ -327,6 +328,24 @@ export const openApiDocument = {
         summary: 'Sign out one device',
         parameters: [pathId('id', 'Session ID')],
         responses: responses('204', 'Signed out', '401', '403', '404'),
+      },
+    },
+    '/account/export': {
+      get: {
+        ...dashboard('Account'),
+        summary: 'Download everything held about you',
+        description: 'Profile, teams, devices, invitations sent, campaigns created and activity.',
+        responses: responses('200', 'Your data as JSON', '401', '403'),
+      },
+    },
+    '/account': {
+      delete: {
+        ...dashboard('Account'),
+        summary: 'Delete your account',
+        description:
+          'Removes your name and email and signs you out everywhere. Your teams keep their campaigns and invoices. Refused while you are the only owner of a team with other members, or the only member of one with campaigns running.',
+        requestBody: jsonBody(deleteAccountSchema),
+        responses: responses('204', 'Deleted', '401', '403', '409', '422'),
       },
     },
     '/account/two-factor/setup': {
@@ -981,6 +1000,24 @@ export const openApiDocument = {
       delete: {
         tags: ['Playback'],
         summary: "Delete a viewer's interest profile",
+        description: 'For a viewer withdrawing consent.',
+        parameters: [query('token', 'Player token', true)],
+        responses: responses('204', 'Deleted', '401'),
+      },
+    },
+    '/player/data': {
+      get: {
+        tags: ['Playback'],
+        summary: 'Download everything held about a viewer',
+        description: 'The interest profile and the ads seen per campaign each day, as JSON.',
+        parameters: [query('token', 'Player token', true)],
+        responses: responses('200', "The viewer's data", '401'),
+      },
+      delete: {
+        tags: ['Playback'],
+        summary: 'Delete everything held about a viewer',
+        description:
+          'Reach and audience counts stay: they are anonymous estimates that cannot be traced to anyone.',
         parameters: [query('token', 'Player token', true)],
         responses: responses('204', 'Deleted', '401'),
       },
