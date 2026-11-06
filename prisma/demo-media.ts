@@ -4,7 +4,7 @@
  * Makes fictional demo videos with FFmpeg, so the repository doesn't need to
  * hold video files: a short episode for each show, and an ad for each campaign.
  */
-import { spawn } from 'child_process';
+import { spawn, spawnSync } from 'child_process';
 import fs from 'fs';
 import fsPromises from 'fs/promises';
 import path from 'path';
@@ -22,7 +22,14 @@ const FONTS = [
   '/System/Library/Fonts/Supplemental/Arial Bold.ttf',
 ];
 
-const font = FONTS.find((candidate) => fs.existsSync(candidate));
+// Some FFmpeg builds, such as ffmpeg-static on Linux, can't draw text. Videos then go without it.
+const drawsText =
+  Boolean(ffmpegPath) &&
+  spawnSync(ffmpegPath as unknown as string, ['-hide_banner', '-filters'], {
+    encoding: 'utf8',
+  }).stdout?.includes(' drawtext ');
+
+const font = drawsText ? FONTS.find((candidate) => fs.existsSync(candidate)) : undefined;
 
 export interface DemoVideo {
   key: string;
